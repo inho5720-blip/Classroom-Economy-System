@@ -1,0 +1,6 @@
+{
+  "name": "학급 화폐 경제 RPG",
+  "description": "초등학교 6학년 학급 경영을 위한 학급 화폐 경제 + RPG 요소 결합 웹 애플리케이션",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
