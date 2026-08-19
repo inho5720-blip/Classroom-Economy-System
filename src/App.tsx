@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, Coins, Sparkles, UserCheck, LogOut } from 'lucide-react';
+import { Menu, Coins, LogOut } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { StudentDashboard } from './components/StudentDashboard';
@@ -11,23 +11,21 @@ import { ShopView } from './components/ShopView';
 import { JobView } from './components/JobView';
 import { PassbookView } from './components/PassbookView';
 import { TeacherAdminView } from './components/TeacherAdminView';
-import { LoginModal } from './components/LoginModal';
 import { LoginView } from './components/LoginView';
 
 function MainAppContent() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const { currentUser, isLoggedIn, logout } = useApp();
 
-  // If user is not logged in, display the full-screen atmospheric LoginView
+  // If user is not logged in, display the full-screen clean LoginView
   if (!isLoggedIn) {
     return <LoginView />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FFFDF7] via-[#F8FAFC] to-[#F1F5F9] text-slate-800 flex flex-col md:flex-row selection:bg-amber-200 selection:text-amber-900 font-sans">
-      {/* 1. Left Sidebar (Fixed on Desktop & Tablet Landscape, Drawer on Portrait/Mobile) */}
+      {/* 1. Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -37,7 +35,7 @@ function MainAppContent() {
 
       {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Mobile/Tablet Top Bar (Hidden on Desktop) */}
+        {/* Mobile/Tablet Top Bar */}
         <header className="md:hidden sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-amber-100 px-4 py-3 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2.5">
             <button
@@ -70,25 +68,24 @@ function MainAppContent() {
               <span>{currentUser.points.toLocaleString()}P</span>
             </div>
 
-            <button
-              onClick={() => setIsLoginModalOpen(true)}
-              className={`w-8 h-8 rounded-xl bg-gradient-to-br ${currentUser.avatarColor} border border-slate-200 flex items-center justify-center text-sm shadow-xs cursor-pointer`}
-              title="계정 전환"
+            <div
+              className={`w-8 h-8 rounded-xl bg-gradient-to-br ${currentUser.avatarColor} border border-slate-200 flex items-center justify-center text-sm shadow-xs select-none`}
             >
               {currentUser.avatarEmoji}
-            </button>
+            </div>
 
             <button
               onClick={logout}
-              className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 transition cursor-pointer"
+              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
               title="로그아웃 (로그인 화면으로 이동)"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">로그아웃</span>
             </button>
           </div>
         </header>
 
-        {/* Content Container (Optimized for both PC & Tablet) */}
+        {/* Content Container */}
         <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
           <AnimatePresence mode="wait">
             <motion.div
@@ -124,8 +121,6 @@ function MainAppContent() {
           </div>
         </footer>
       </div>
-
-      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </div>
   );
 }

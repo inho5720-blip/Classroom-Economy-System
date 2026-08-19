@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Coins,
   Shield,
@@ -6,7 +6,6 @@ import {
   Home,
   Trophy,
   ShoppingBag,
-  UserCheck,
   Sparkles,
   Settings,
   Menu,
@@ -20,7 +19,6 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { LoginModal } from './LoginModal';
 
 interface SidebarProps {
   activeTab: string;
@@ -36,7 +34,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsMobileOpen,
 }) => {
   const { currentUser, titles, triggerCelebration, logout } = useApp();
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const mainTitle = titles.find((t) => t.id === currentUser.mainTitleId);
   const isTeacher = currentUser.role === 'teacher';
@@ -127,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleNavClick = (itemId: string, adminOnly?: boolean) => {
     if (adminOnly && !isTeacher) {
-      setIsLoginModalOpen(true);
+      alert('선생님 관리실은 교사 계정으로 로그인한 경우에만 접근할 수 있습니다.');
       return;
     }
     setActiveTab(itemId);
@@ -207,18 +204,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="flex items-center gap-1 shrink-0">
             <button
-              onClick={() => setIsLoginModalOpen(true)}
-              className="p-1.5 rounded-xl bg-white hover:bg-amber-100/60 border border-slate-200 text-slate-600 hover:text-amber-700 transition shadow-2xs cursor-pointer"
-              title="계정 전환"
-            >
-              <UserCheck className="w-4 h-4" />
-            </button>
-            <button
               onClick={logout}
-              className="p-1.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-slate-400 hover:text-rose-600 transition shadow-2xs cursor-pointer"
+              className="p-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-slate-500 hover:text-rose-600 transition shadow-2xs flex items-center gap-1 text-xs font-bold cursor-pointer"
               title="로그아웃 (로그인 화면으로 이동)"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
+              <span>로그아웃</span>
             </button>
           </div>
         </div>
@@ -319,20 +310,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             v2.0
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setIsLoginModalOpen(true)}
-            className="py-2 px-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-amber-600" />
-            <span>계정 전환</span>
-          </button>
+        <div className="pt-1">
           <button
             onClick={logout}
-            className="py-2 px-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-rose-700 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
+            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-rose-700 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-500" />
-            <span>로그아웃</span>
+            <span>로그아웃 (접속 종료)</span>
           </button>
         </div>
       </div>
@@ -367,9 +351,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       )}
-
-      {/* Account / User Switcher Modal */}
-      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </>
   );
 };
