@@ -40,6 +40,12 @@ import {
   INITIAL_AUCTION_ITEMS,
   INITIAL_AUCTION_BIDS,
 } from '../data/initialData';
+import {
+  fetchProfilesFromSupabase,
+  fetchStatsFromSupabase,
+  updateProfileInSupabase,
+  isSupabaseConfigured,
+} from '../lib/supabase';
 
 export interface PointTrendData {
   date: string;
@@ -326,6 +332,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${STORAGE_KEY}_isRankingPublic`, JSON.stringify(isRankingPublic));
   }, [isRankingPublic]);
 
+  // 🌐 Supabase Cloud Database Realtime Sync on mount
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let isMounted = true;
+
+    async function syncFromSupabase() {
+      try {
+        const [cloudProfiles, cloudStats] = await Promise.all([
+          fetchProfilesFromSupabase(),
+          fetchStatsFromSupabase(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (cloudProfiles && cloudProfiles.length > 0) {
+          console.log(`[Supabase] Successfully loaded ${cloudProfiles.length} profiles from DB.`);
+          setUsers(cloudProfiles);
+
+          // If current selected user is not in the DB, default to first user
+          setCurrentUserId((prev) => {
+            const exists = cloudProfiles.some((u) => u.id === prev);
+            return exists ? prev : cloudProfiles[0].id;
+          });
+        }
+
+        if (cloudStats && Object.keys(cloudStats).length > 0) {
+          console.log(`[Supabase] Successfully loaded stats from DB.`);
+          setStats((prev) => ({ ...prev, ...cloudStats }));
+        }
+      } catch (e) {
+        console.warn('[Supabase] Initial sync warning:', e);
+      }
+    }
+
+    syncFromSupabase();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Current active user
   const currentUser = users.find((u) => u.id === currentUserId) || users[0] || INITIAL_TEACHER;
 
@@ -504,6 +552,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return u;
       })
     );
+
+    // Sync to Supabase DB if configured
+    if (isSupabaseConfigured) {
+      updateProfileInSupabase(userId, updates).catch((err) =>
+        console.warn('[Supabase] Failed to persist profile updates:', err)
+      );
+    }
   };
 
   // Job management
