@@ -244,10 +244,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           메인 메뉴
         </div>
 
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || isTeacher).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          const isLocked = item.adminOnly && !isTeacher;
 
           return (
             <button
@@ -274,9 +273,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="text-sm font-bold truncate whitespace-nowrap">
                       {item.label}
                     </span>
-                    {isLocked && (
-                      <span className="text-[10px] text-slate-400">🔒</span>
-                    )}
                   </div>
                   <div className="text-[11px] text-slate-400 group-hover:text-slate-500 truncate whitespace-nowrap">
                     {item.subtitle}

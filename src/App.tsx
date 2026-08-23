@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Menu, Coins, LogOut } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
@@ -14,11 +14,31 @@ import { TeacherAdminView } from './components/TeacherAdminView';
 import { LoginView } from './components/LoginView';
 
 function MainAppContent() {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const { currentUser, isLoggedIn, logout } = useApp();
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return currentUser?.role === 'teacher' ? 'admin' : 'dashboard';
+  });
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
 
-  // If user is not logged in, display the full-screen clean LoginView
+  // Sync active tab when user logs in or role changes
+  useEffect(() => {
+    if (isLoggedIn) {
+      if (currentUser.role === 'teacher') {
+        setActiveTab('admin');
+      } else {
+        setActiveTab('dashboard');
+      }
+    }
+  }, [isLoggedIn, currentUser?.id, currentUser?.role]);
+
+  // Guard against non-teacher accessing admin tab
+  useEffect(() => {
+    if (isLoggedIn && currentUser.role !== 'teacher' && activeTab === 'admin') {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, currentUser?.role, isLoggedIn]);
+
+  // If user is not logged in, display the full-screen unified LoginView
   if (!isLoggedIn) {
     return <LoginView />;
   }
@@ -102,7 +122,7 @@ function MainAppContent() {
               {activeTab === 'seats' && <SeatRealEstateView />}
               {activeTab === 'rankings' && <RankingsView />}
               {activeTab === 'shop' && <ShopView />}
-              {activeTab === 'admin' && <TeacherAdminView />}
+              {activeTab === 'admin' && currentUser.role === 'teacher' && <TeacherAdminView />}
             </motion.div>
           </AnimatePresence>
         </main>

@@ -81,8 +81,7 @@ interface AppContextType {
   setIsRankingPublic: (val: boolean) => void;
   
   // Auth & Account actions
-  loginAsUser: (userId: string) => void;
-  loginWithCredentials: (studentNumberOrName: string, password: string) => { success: boolean; message: string };
+  loginWithCredentials: (studentNumberOrName: string, password: string) => { success: boolean; role?: 'teacher' | 'student'; message: string; user?: Profile };
   batchCreateStudents: (studentListText: string, defaultPassword?: string) => { count: number };
   updateProfile: (userId: string, updates: Partial<Profile>) => void;
   
@@ -439,29 +438,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsLoggedIn(true);
   };
 
-  const loginAsUser = (userId: string) => {
-    const target = users.find((u) => u.id === userId);
-    if (target) {
-      setCurrentUserId(target.id);
-      setIsLoggedIn(true);
-    }
-  };
-
   const logout = () => {
     setIsLoggedIn(false);
+    localStorage.setItem(`${STORAGE_KEY}_isLoggedIn`, JSON.stringify(false));
   };
 
   const loginWithCredentials = (studentNumberOrName: string, pass: string) => {
     const trimmed = studentNumberOrName.trim().toLowerCase();
     const matched = users.find(
       (u) =>
+        u.id.toLowerCase() === trimmed ||
         u.studentNumber?.toLowerCase() === trimmed ||
         u.name.toLowerCase() === trimmed ||
-        u.nickname.toLowerCase() === trimmed
+        u.nickname.toLowerCase() === trimmed ||
+        (trimmed === 'teacher' && u.role === 'teacher') ||
+        (trimmed === '선생님' && u.role === 'teacher') ||
+        (trimmed === 'admin' && u.role === 'teacher')
     );
 
     if (!matched) {
-      return { success: false, message: '일치하는 학생 또는 교사 계정을 찾을 수 없습니다.' };
+      return { success: false, message: '등록된 학생 또는 교사 계정을 찾을 수 없습니다.' };
     }
 
     if (matched.passwordHash !== pass.trim()) {
@@ -470,7 +466,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setCurrentUserId(matched.id);
     setIsLoggedIn(true);
-    return { success: true, message: `${matched.name}님으로 로그인되었습니다.` };
+    localStorage.setItem(`${STORAGE_KEY}_currentUser`, matched.id);
+    localStorage.setItem(`${STORAGE_KEY}_isLoggedIn`, JSON.stringify(true));
+    return {
+      success: true,
+      role: matched.role,
+      user: matched,
+      message: `${matched.name}님으로 로그인되었습니다.`,
+    };
   };
 
   const batchCreateStudents = (studentListText: string, defaultPassword = '1234') => {
@@ -1656,7 +1659,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         auctionBids,
         isRankingPublic,
         setIsRankingPublic,
-        loginAsUser,
         loginWithCredentials,
         batchCreateStudents,
         updateProfile,
