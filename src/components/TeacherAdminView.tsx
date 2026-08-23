@@ -78,11 +78,17 @@ export const TeacherAdminView: React.FC = () => {
     createAuction,
     closeAuction,
     deleteAuction,
+    resetClassroomEconomy,
   } = useApp();
 
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<
     'approvals' | 'shop_items' | 'seat_real_estate' | 'auctions' | 'jobs' | 'quests' | 'taxes' | 'shop_history' | 'students'
   >('approvals');
+
+  // Reset classroom modal state
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showSqlGuideModal, setShowSqlGuideModal] = useState(false);
 
   // Job Application rejection modal
   const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
@@ -2762,44 +2768,79 @@ export const TeacherAdminView: React.FC = () => {
 
       {/* SUB TAB 6: STUDENTS ROSTER & POINT ADJUST */}
       {activeAdminSubTab === 'students' && (
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-base text-slate-850">학생 화폐 잔액 & 수기 상벌점 조정</h3>
-            <p className="text-xs text-slate-500">특별 기여 포인트를 주거나 벌점을 부과할 수 있습니다.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {students.map((student) => (
-              <div
-                key={student.id}
-                className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${student.avatarColor} flex items-center justify-center text-xl shadow-2xs`}>
-                    {student.avatarEmoji}
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-800">
-                      {student.name} #{student.studentNumber}
-                    </div>
-                    <div
-                      className={`text-xs font-mono font-bold ${
-                        student.points < 0 ? 'text-rose-600' : 'text-amber-700'
-                      }`}
-                    >
-                      {student.points.toLocaleString()} P
-                    </div>
-                  </div>
-                </div>
-
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-slate-850">학생 화폐 잔액 & 수기 상벌점 조정</h3>
+                <p className="text-xs text-slate-500">특별 기여 포인트를 주거나 벌점을 부과할 수 있습니다.</p>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setAdjustUserId(student.id)}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs transition"
+                  onClick={() => setShowSqlGuideModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  조정
+                  <span>⚡ Supabase SQL 가이드</span>
                 </button>
               </div>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {students.map((student) => (
+                <div
+                  key={student.id}
+                  className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${student.avatarColor} flex items-center justify-center text-xl shadow-2xs`}>
+                      {student.avatarEmoji}
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-850">
+                        {student.name} #{student.studentNumber}
+                      </div>
+                      <div
+                        className={`text-xs font-mono font-bold ${
+                          student.points < 0 ? 'text-rose-600' : 'text-amber-700'
+                        }`}
+                      >
+                        {student.points.toLocaleString()} P
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setAdjustUserId(student.id)}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs transition cursor-pointer"
+                  >
+                    조정
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Clean Reset Section for New Semester / Testing */}
+          <div className="bg-rose-50/50 border border-rose-200/80 rounded-3xl p-6 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-rose-700 font-extrabold text-sm">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span>학급 경제 데이터 클린 초기화 (신학기 시작)</span>
+                </div>
+                <p className="text-xs text-slate-600">
+                  이전 테스트로 발생한 모든 전자 통장 거래 기록, 퀘스트 승인 내역, 상점 주문 내역을 말끔히 비우고 모든 학생의 포인트를 초기값(1,000P)으로 재설정합니다. (Supabase 연결 시 DB도 함께 초기화됩니다)
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowResetConfirmModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition shrink-0 flex items-center gap-2 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>데이터 전체 초기화 실행</span>
+              </button>
+            </div>
           </div>
 
           {/* Adjust Dialog */}
@@ -2833,15 +2874,167 @@ export const TeacherAdminView: React.FC = () => {
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     onClick={() => setAdjustUserId(null)}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs cursor-pointer"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleAdjustPointsSubmit}
-                    className="px-4 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-2xs"
+                    className="px-4 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-2xs cursor-pointer"
                   >
                     적용
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Confirmation Modal */}
+          {showResetConfirmModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+              <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3 text-rose-600">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-850">학급 데이터 전체 초기화</h3>
+                    <p className="text-xs text-rose-600 font-bold">이 작업은 되돌릴 수 없습니다.</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-2">
+                  <p className="font-bold">초기화 시 다음 데이터가 삭제 및 리셋됩니다:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                    <li>모든 전자 통장 거래 내역 (입출금 로그) 초기화</li>
+                    <li>모든 학생 포인트 기본값(1,000P)으로 재설정</li>
+                    <li>퀘스트 신청 및 승인 내역 초기화</li>
+                    <li>상점 구매 주문 내역 초기화</li>
+                    <li>연동된 Supabase DB 테이블 내역 동기화 삭제</li>
+                  </ul>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    disabled={isResetting}
+                    onClick={() => setShowResetConfirmModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    disabled={isResetting}
+                    onClick={async () => {
+                      setIsResetting(true);
+                      try {
+                        await resetClassroomEconomy();
+                        showToast('학급 경제 데이터가 깨끗하게 초기화되었습니다! (학생 기본 1,000P)');
+                        setShowResetConfirmModal(false);
+                      } catch (err) {
+                        showToast('초기화 중 오류가 발생했습니다.');
+                      } finally {
+                        setIsResetting(false);
+                      }
+                    }}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition flex items-center gap-2 cursor-pointer"
+                  >
+                    {isResetting ? (
+                      <>
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>초기화 진행 중...</span>
+                      </>
+                    ) : (
+                      <span>네, 모두 초기화합니다</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Supabase SQL Helper Modal */}
+          {showSqlGuideModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+              <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                      ⚡
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-base text-slate-850">Supabase DB 테이블 스키마</h3>
+                      <p className="text-xs text-slate-500">수파베이스의 SQL Editor에 붙여넣어 실행하면 통장 로그가 영구 저장됩니다.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSqlGuideModal(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  <p className="text-xs text-slate-600">
+                    아래 SQL 스크립트를 복사하여 Supabase 대시보드의 <strong>SQL Editor</strong>에서 <strong>Run</strong> 버튼을 눌러 실행해주세요.
+                  </p>
+                  <pre className="p-3.5 rounded-xl bg-slate-900 text-emerald-400 text-[11px] font-mono overflow-x-auto leading-relaxed select-all">
+{`-- 1. 전자 통장 포인트 거래 내역 테이블 생성
+CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    user_name TEXT,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 인덱스 생성 (조회 속도 최적화)
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+
+-- RLS (Row Level Security) 설정
+ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read-write for point transactions"
+ON public.point_transactions
+FOR ALL
+TO anon, authenticated
+USING (true)
+WITH CHECK (true);`}
+                  </pre>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    user_name TEXT,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);`);
+                      showToast('SQL 스크립트가 클립보드에 복사되었습니다!');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>📋 SQL 복사하기</span>
+                  </button>
+                  <button
+                    onClick={() => setShowSqlGuideModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                  >
+                    닫기
                   </button>
                 </div>
               </div>

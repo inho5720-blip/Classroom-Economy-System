@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Profile, StudentStats } from '../types';
+import { Profile, StudentStats, PointLedger } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -123,6 +123,87 @@ export async function updateProfileInSupabase(
     return true;
   } catch (err) {
     console.warn('[Supabase] Error updating profile:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 point_transactions 테이블에서 전자 통장 거래 로그 조회
+ */
+export async function fetchPointLedgersFromSupabase(): Promise<PointLedger[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('point_transactions')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      // 테이블이 아직 없거나 에러 시 경고 로그
+      console.warn('[Supabase] Failed to fetch point transactions:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return data.map((row: any) => ({
+      id: row.id,
+      userId: row.user_id,
+      amount: Number(row.amount),
+      balanceAfter: Number(row.balance_after),
+      category: row.category,
+      description: row.description || '',
+      createdAt: row.created_at || new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn('[Supabase] Error connecting to point_transactions DB:', err);
+    return null;
+  }
+}
+
+/**
+ * Supabase DB의 point_transactions 테이블에 포인트 증감 로그 1건 추가
+ */
+export async function insertPointTransactionToSupabase(
+  transaction: PointLedger
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('point_transactions').insert({
+      id: transaction.id,
+      user_id: transaction.userId,
+      amount: transaction.amount,
+      balance_after: transaction.balanceAfter,
+      category: transaction.category,
+      description: transaction.description,
+      created_at: transaction.createdAt,
+    });
+
+    if (error) {
+      console.warn('[Supabase] Failed to insert point transaction:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error inserting point transaction:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 전체 point_transactions 삭제 (신학기 리셋)
+ */
+export async function resetPointTransactionsInSupabase(): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('point_transactions').delete().neq('id', 'placeholder');
+    if (error) {
+      console.warn('[Supabase] Failed to reset transactions:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error resetting transactions:', err);
     return false;
   }
 }

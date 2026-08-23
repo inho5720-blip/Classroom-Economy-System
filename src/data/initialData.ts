@@ -142,12 +142,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '골드헌터 민우',
     passwordHash: '1234',
     role: 'student',
-    points: 2450, // 최고 포인트 -> 만수르 후보
-    mainTitleId: 'title-mansour',
+    points: 1000,
     avatarEmoji: '🧙‍♂️',
     avatarColor: 'from-amber-500 to-orange-600',
-    consecutiveSuccessDays: 8,
-    unspentDays: 6,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -158,12 +157,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '별빛서연',
     passwordHash: '1234',
     role: 'student',
-    points: 1890,
-    mainTitleId: 'title-homeowner',
+    points: 1000,
     avatarEmoji: '🏹',
     avatarColor: 'from-emerald-500 to-teal-600',
-    consecutiveSuccessDays: 5,
-    unspentDays: 12,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -174,12 +172,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '빛의기사 도윤',
     passwordHash: '1234',
     role: 'student',
-    points: 1420,
-    mainTitleId: 'title-diligence-master',
+    points: 1000,
     avatarEmoji: '⚔️',
     avatarColor: 'from-blue-500 to-cyan-600',
-    consecutiveSuccessDays: 9,
-    unspentDays: 3,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -190,12 +187,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '지혜의 요정 지안',
     passwordHash: '1234',
     role: 'student',
-    points: 1200,
-    mainTitleId: 'title-wise-sage',
+    points: 1000,
     avatarEmoji: '🧚‍♀️',
     avatarColor: 'from-purple-500 to-indigo-600',
-    consecutiveSuccessDays: 6,
-    unspentDays: 8,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -206,12 +202,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '폭풍질주 시우',
     passwordHash: '1234',
     role: 'student',
-    points: 850,
-    mainTitleId: 'title-contributor',
+    points: 1000,
     avatarEmoji: '🛡️',
     avatarColor: 'from-rose-500 to-red-600',
-    consecutiveSuccessDays: 4,
-    unspentDays: 2,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -222,12 +217,11 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '달콤예은',
     passwordHash: '1234',
     role: 'student',
-    points: 420,
-    mainTitleId: 'title-model-taxpayer',
+    points: 1000,
     avatarEmoji: '🎨',
     avatarColor: 'from-pink-500 to-rose-500',
-    consecutiveSuccessDays: 3,
-    unspentDays: 1,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
@@ -238,8 +232,7 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '썬더 하준',
     passwordHash: '1234',
     role: 'student',
-    points: -120, // 마이너스 통장 예시!
-    mainTitleId: 'title-bankrupt-risk',
+    points: 1000,
     avatarEmoji: '⚡',
     avatarColor: 'from-zinc-500 to-slate-700',
     consecutiveSuccessDays: 0,
@@ -254,26 +247,25 @@ export const INITIAL_STUDENTS: Profile[] = [
     nickname: '그린가디언 지민',
     passwordHash: '1234',
     role: 'student',
-    points: 1650,
-    mainTitleId: 'title-frugal-pro',
+    points: 1000,
     avatarEmoji: '🌱',
     avatarColor: 'from-green-500 to-emerald-600',
-    consecutiveSuccessDays: 7,
-    unspentDays: 15,
+    consecutiveSuccessDays: 0,
+    unspentDays: 0,
     createdAt: '2026-03-02T00:00:00.000Z',
     updatedAt: '2026-03-02T00:00:00.000Z',
   },
 ];
 
 export const INITIAL_STATS: Record<string, StudentStats> = {
-  'student-1': { userId: 'student-1', diligence: 45, frugality: 38, contribution: 30, wisdom: 35, credit: 98 },
-  'student-2': { userId: 'student-2', diligence: 38, frugality: 48, contribution: 25, wisdom: 40, credit: 95 },
-  'student-3': { userId: 'student-3', diligence: 50, frugality: 25, contribution: 42, wisdom: 30, credit: 92 },
-  'student-4': { userId: 'student-4', diligence: 35, frugality: 30, contribution: 28, wisdom: 52, credit: 94 },
-  'student-5': { userId: 'student-5', diligence: 32, frugality: 20, contribution: 48, wisdom: 25, credit: 88 },
-  'student-6': { userId: 'student-6', diligence: 28, frugality: 15, contribution: 30, wisdom: 35, credit: 85 },
-  'student-7': { userId: 'student-7', diligence: 15, frugality: 8, contribution: 12, wisdom: 20, credit: 55 }, // 저신용
-  'student-8': { userId: 'student-8', diligence: 42, frugality: 50, contribution: 35, wisdom: 38, credit: 96 },
+  'student-1': { userId: 'student-1', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-2': { userId: 'student-2', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-3': { userId: 'student-3', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-4': { userId: 'student-4', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-5': { userId: 'student-5', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-6': { userId: 'student-6', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-7': { userId: 'student-7', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
+  'student-8': { userId: 'student-8', diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10 },
 };
 
 export const INITIAL_JOBS: Job[] = [
@@ -349,53 +341,9 @@ export const INITIAL_JOBS: Job[] = [
   },
 ];
 
-export const INITIAL_STUDENT_JOBS: StudentJobAssignment[] = [
-  { id: 'assign-1', userId: 'student-1', jobId: 'job-1', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-2', userId: 'student-2', jobId: 'job-2', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-3', userId: 'student-3', jobId: 'job-3', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-4', userId: 'student-4', jobId: 'job-5', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-5', userId: 'student-5', jobId: 'job-6', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-6', userId: 'student-6', jobId: 'job-7', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-7', userId: 'student-7', jobId: 'job-1', assignedAt: '2026-03-02', isActive: true },
-  { id: 'assign-8', userId: 'student-8', jobId: 'job-4', assignedAt: '2026-03-02', isActive: true },
-];
+export const INITIAL_STUDENT_JOBS: StudentJobAssignment[] = [];
 
-export const INITIAL_JOB_APPLICATIONS: JobApplication[] = [
-  {
-    id: 'app-1',
-    userId: 'student-3',
-    jobId: 'job-6', // 체육 장비 부장
-    reason: '체육 수업 때 친구들이 다치지 않고 신나게 활동할 수 있도록 모든 축구공과 뜀틀을 빠르고 안전하게 세팅하고 싶습니다!',
-    pledge: '비가 오거나 수업이 끝난 직후에도 5분 안에 장비실을 완벽하게 정리하고 공 바람을 항상 채워두겠습니다.',
-    status: 'pending',
-    appliedAt: '2026-08-16T14:30:00.000Z',
-  },
-  {
-    id: 'app-2',
-    userId: 'student-2',
-    jobId: 'custom', // 새 직업 제안
-    proposedJobTitle: '생일 축하 & 칭찬 DJ',
-    proposedJobDescription: '매월 생일인 친구들에게 축하 카드를 전달하고 점심시간에 신청곡과 칭찬 사연을 방송합니다.',
-    proposedWeeklySalary: 550,
-    proposedIcon: '🎵',
-    proposedCategory: 'service',
-    reason: '우리 반 친구들이 생일 때 더 큰 축하를 받고, 서로 칭찬하는 따뜻한 반 분위기를 만들고 싶어서 제안합니다!',
-    pledge: '매주 월요일 점심시간에 따뜻한 사연과 힐링 음악을 틀어 학급 행복도를 200% 올리겠습니다.',
-    status: 'pending',
-    appliedAt: '2026-08-17T09:15:00.000Z',
-  },
-  {
-    id: 'app-3',
-    userId: 'student-1',
-    jobId: 'job-1', // 칠판 마스터
-    reason: '글씨를 깔끔하게 적고 칠판 청결을 유지하는 것에 자부심이 있습니다. 1학기 때도 완벽히 수행했습니다.',
-    pledge: '수업 시작 3분 전 항상 물걸레로 칠판을 닦아 반짝이게 만들겠습니다.',
-    status: 'approved',
-    appliedAt: '2026-03-01T10:00:00.000Z',
-    reviewedAt: '2026-03-02T08:30:00.000Z',
-    reviewedBy: 'teacher-1',
-  },
-];
+export const INITIAL_JOB_APPLICATIONS: JobApplication[] = [];
 
 export const INITIAL_QUESTS: Quest[] = [
   {
@@ -414,15 +362,15 @@ export const INITIAL_QUESTS: Quest[] = [
   },
   {
     id: 'quest-math-hw',
-    title: '수학 익힘책 42~45쪽 풀기',
-    description: '분수의 나눗셈 단원 마무리 문제 풀고 채점 후 오답 수정하기',
+    title: '수학 익힘책 문제 풀기',
+    description: '단원 마무리 문제 풀고 채점 후 오답 수정하기',
     questType: 'homework',
-    rewardPoints: 120,
+    rewardPoints: 100,
     statRewardType: 'wisdom',
-    statRewardAmount: 3,
+    statRewardAmount: 2,
     isRecurring: false,
     frequencyType: 'once',
-    dueDate: '2026-08-17',
+    dueDate: '2026-08-31',
     targetStudentType: 'all',
     icon: '📐',
   },
@@ -442,12 +390,12 @@ export const INITIAL_QUESTS: Quest[] = [
   },
   {
     id: 'quest-clean-help',
-    title: '교실 바닥 쓰레기 5개 줍기 & 분리수거',
+    title: '교실 바닥 쓰레기 줍기 & 분리수거',
     description: '교실 환경을 쾌적하게 만들기 위한 자발적 청소 공헌 활동',
     questType: 'special',
     rewardPoints: 70,
     statRewardType: 'contribution',
-    statRewardAmount: 3,
+    statRewardAmount: 2,
     isRecurring: true,
     frequencyType: 'recurring',
     recurringDays: [1, 2, 3, 4, 5],
@@ -456,65 +404,7 @@ export const INITIAL_QUESTS: Quest[] = [
   },
 ];
 
-export const INITIAL_QUEST_LOGS: QuestLog[] = [
-  {
-    id: 'log-1',
-    questId: 'quest-job-daily',
-    userId: 'student-1',
-    targetDate: '2026-08-17',
-    status: 'approved',
-    studentMemo: '칠판 지우개 털고 분필 색상별로 정리 완료했습니다!',
-    reviewedAt: '2026-08-17T15:30:00Z',
-    reviewedBy: 'teacher-1',
-    isPaid: false,
-    submittedAt: '2026-08-17T14:20:00Z',
-  },
-  {
-    id: 'log-2',
-    questId: 'quest-math-hw',
-    userId: 'student-1',
-    targetDate: '2026-08-17',
-    status: 'pending',
-    studentMemo: '45쪽 6번 문제까지 오답 정리 마쳤습니다.',
-    isPaid: false,
-    submittedAt: '2026-08-17T16:00:00Z',
-  },
-  {
-    id: 'log-3',
-    questId: 'quest-reading',
-    userId: 'student-1',
-    targetDate: '2026-08-16',
-    status: 'approved',
-    studentMemo: '어린왕자 3장 완독. 여우와의 대화가 감동적이었습니다.',
-    reviewedAt: '2026-08-16T16:30:00Z',
-    reviewedBy: 'teacher-1',
-    isPaid: false,
-    submittedAt: '2026-08-16T09:00:00Z',
-  },
-  {
-    id: 'log-4',
-    questId: 'quest-job-daily',
-    userId: 'student-2',
-    targetDate: '2026-08-17',
-    status: 'pending',
-    studentMemo: '소등 완료 및 에어컨 끄기 확인',
-    isPaid: false,
-    submittedAt: '2026-08-17T14:50:00Z',
-  },
-  {
-    id: 'log-5',
-    questId: 'quest-job-daily',
-    userId: 'student-7',
-    targetDate: '2026-08-17',
-    status: 'rejected',
-    studentMemo: '했음',
-    rejectReason: '칠판 아래 분필 가루가 전혀 청소되지 않았습니다. 다시 털고 검사받으세요.',
-    reviewedAt: '2026-08-17T15:40:00Z',
-    reviewedBy: 'teacher-1',
-    isPaid: false,
-    submittedAt: '2026-08-17T15:10:00Z',
-  },
-];
+export const INITIAL_QUEST_LOGS: QuestLog[] = [];
 
 export const INITIAL_TAX_SETTINGS: TaxSetting[] = [
   {
@@ -543,16 +433,12 @@ export const INITIAL_TAX_SETTINGS: TaxSetting[] = [
   },
 ];
 
-// 24 seats in 4 columns x 6 rows (or 6 pairs)
+// 24 seats in 4 columns x 6 rows (모두 깨끗한 국가 소유 초기 상태)
 export const INITIAL_SEATS: Seat[] = Array.from({ length: 24 }, (_, i) => {
   const seatNumber = i + 1;
   const rowIdx = Math.floor(i / 4) + 1;
   const colIdx = (i % 4) + 1;
   
-  let ownerId: string | null = null;
-  let currentOccupantId: string | null = null;
-  let isForSale = false;
-  let salePrice = 0;
   let zone: Seat['zone'] = 'middle';
 
   if (rowIdx === 1) zone = 'front';
@@ -560,59 +446,23 @@ export const INITIAL_SEATS: Seat[] = Array.from({ length: 24 }, (_, i) => {
   else if (colIdx === 1 || colIdx === 4) zone = 'window';
   else if (rowIdx === 3 && (colIdx === 2 || colIdx === 3)) zone = 'vip';
 
-  // Demo ownerships
-  if (seatNumber === 1) {
-    ownerId = 'student-1';
-    currentOccupantId = 'student-1';
-  } else if (seatNumber === 2) {
-    ownerId = 'student-2';
-    currentOccupantId = 'student-2';
-  } else if (seatNumber === 3) {
-    ownerId = 'student-3';
-    currentOccupantId = 'student-3';
-    isForSale = true;
-    salePrice = 1200; // For sale in carrot market!
-  } else if (seatNumber === 4) {
-    currentOccupantId = 'student-4'; // 국가 소유 임대 중
-  } else if (seatNumber === 5) {
-    currentOccupantId = 'student-5';
-  } else if (seatNumber === 6) {
-    currentOccupantId = 'student-6';
-  } else if (seatNumber === 7) {
-    currentOccupantId = 'student-7';
-  } else if (seatNumber === 8) {
-    currentOccupantId = 'student-8';
-  }
-
   return {
     id: `seat-${seatNumber}`,
     seatNumber,
     rowIdx,
     colIdx,
-    ownerId,
-    currentOccupantId,
+    ownerId: null,
+    currentOccupantId: null,
     rentalFee: 50,
     purchasePrice: 600,
-    isForSale,
-    salePrice,
+    isForSale: false,
+    salePrice: 0,
     zone,
     isActive: true,
   };
 });
 
-export const INITIAL_USER_TITLES: UserTitle[] = [
-  { id: 'ut-1', userId: 'student-1', titleId: 'title-mansour', acquiredAt: '2026-03-05' },
-  { id: 'ut-2', userId: 'student-1', titleId: 'title-homeowner', acquiredAt: '2026-03-08' },
-  { id: 'ut-3', userId: 'student-1', titleId: 'title-diligence-master', acquiredAt: '2026-03-12' },
-  { id: 'ut-4', userId: 'student-2', titleId: 'title-homeowner', acquiredAt: '2026-03-06' },
-  { id: 'ut-5', userId: 'student-2', titleId: 'title-frugal-pro', acquiredAt: '2026-03-14' },
-  { id: 'ut-6', userId: 'student-3', titleId: 'title-diligence-master', acquiredAt: '2026-03-10' },
-  { id: 'ut-7', userId: 'student-4', titleId: 'title-wise-sage', acquiredAt: '2026-03-11' },
-  { id: 'ut-8', userId: 'student-5', titleId: 'title-contributor', acquiredAt: '2026-03-13' },
-  { id: 'ut-9', userId: 'student-6', titleId: 'title-model-taxpayer', acquiredAt: '2026-03-14' },
-  { id: 'ut-10', userId: 'student-7', titleId: 'title-bankrupt-risk', acquiredAt: '2026-03-15' },
-  { id: 'ut-11', userId: 'student-8', titleId: 'title-frugal-pro', acquiredAt: '2026-03-15' },
-];
+export const INITIAL_USER_TITLES: UserTitle[] = [];
 
 export const INITIAL_SHOP_ITEMS: ShopItem[] = [
   {
@@ -677,316 +527,27 @@ export const INITIAL_SHOP_ITEMS: ShopItem[] = [
   },
 ];
 
-export const INITIAL_SHOP_ORDERS: ShopOrder[] = [
-  {
-    id: 'order-1',
-    userId: 'student-3',
-    itemId: 'item-2',
-    itemName: '🎵 오늘의 학급 DJ 음악 신청권',
-    paidPrice: 150,
-    isUsed: true,
-    purchasedAt: '2026-08-16T11:20:00Z',
-  },
-  {
-    id: 'order-2',
-    userId: 'student-1',
-    itemId: 'item-3',
-    itemName: '🍫 달콤 간식 보물상자',
-    paidPrice: 250,
-    isUsed: true,
-    purchasedAt: '2026-08-15T15:10:00Z',
-  },
-];
+export const INITIAL_SHOP_ORDERS: ShopOrder[] = [];
 
-export const INITIAL_POINT_LEDGER: PointLedger[] = [
-  // student-1 (강민우) - 다채로운 거래 기록 (5월, 6월, 7월, 8월 여러 주차 및 최근 7일 일별 거래)
-  {
-    id: 'ledger-s1-0-1',
-    userId: 'student-1',
-    amount: 1000,
-    balanceAfter: 1000,
-    category: 'salary',
-    description: '1학기 학급 개설 기본 자금 지급',
-    createdAt: '2026-05-04T09:00:00Z',
-  },
-  {
-    id: 'ledger-s1-0-2',
-    userId: 'student-1',
-    amount: 850,
-    balanceAfter: 1850,
-    category: 'salary',
-    description: '5월 누적 주급 및 퀘스트 보상 정산',
-    createdAt: '2026-05-29T15:00:00Z',
-  },
-  {
-    id: 'ledger-s1-0-3',
-    userId: 'student-1',
-    amount: -300,
-    balanceAfter: 1550,
-    category: 'shop_purchase',
-    description: '상점 구매: 🎮 태블릿 자유시간 15분',
-    createdAt: '2026-06-12T14:00:00Z',
-  },
-  {
-    id: 'ledger-s1-0-4',
-    userId: 'student-1',
-    amount: 920,
-    balanceAfter: 2470,
-    category: 'salary',
-    description: '6월 주급 & 칠판 청소 모범상 인센티브',
-    createdAt: '2026-06-30T16:00:00Z',
-  },
-  {
-    id: 'ledger-s1-0-5',
-    userId: 'student-1',
-    amount: -600,
-    balanceAfter: 1870,
-    category: 'seat_rental',
-    description: '1번 VIP 자리 소유권 매입 결제',
-    createdAt: '2026-07-10T11:00:00Z',
-  },
-  {
-    id: 'ledger-s1-0-6',
-    userId: 'student-1',
-    amount: 800,
-    balanceAfter: 2670,
-    category: 'salary',
-    description: '7월 주급 및 여름방학 특별 퀘스트 정산',
-    createdAt: '2026-07-31T15:00:00Z',
-  },
-  // 8월 1주차
-  {
-    id: 'ledger-s1-1',
-    userId: 'student-1',
-    amount: 500,
-    balanceAfter: 3170,
-    category: 'salary',
-    description: '8월 1주차 기본 정착금 및 학급 활동비',
-    createdAt: '2026-08-03T09:00:00Z',
-  },
-  {
-    id: 'ledger-s1-1-b',
-    userId: 'student-1',
-    amount: -80,
-    balanceAfter: 3090,
-    category: 'tax',
-    description: '8월 1주차 정기 소득세 납부',
-    createdAt: '2026-08-07T15:00:00Z',
-  },
-  // 8월 2주차 (최근 일주일 일별)
-  {
-    id: 'ledger-s1-2',
-    userId: 'student-1',
-    amount: 100,
-    balanceAfter: 3190,
-    category: 'quest_bonus',
-    description: '퀘스트 완료: 📝 수학 익힘책 42~45쪽 풀이',
-    createdAt: '2026-08-11T14:30:00Z',
-  },
-  {
-    id: 'ledger-s1-3',
-    userId: 'student-1',
-    amount: 120,
-    balanceAfter: 3310,
-    category: 'quest_bonus',
-    description: '퀘스트 완료: 📖 한 학기 한 권 읽기 독서록 제출',
-    createdAt: '2026-08-12T16:00:00Z',
-  },
-  {
-    id: 'ledger-s1-4',
-    userId: 'student-1',
-    amount: 600,
-    balanceAfter: 3910,
-    category: 'salary',
-    description: '1인 1역 주급 지급 (칠판 마스터: 600P)',
-    createdAt: '2026-08-13T15:00:00Z',
-  },
-  {
-    id: 'ledger-s1-5',
-    userId: 'student-1',
-    amount: -70,
-    balanceAfter: 3840,
-    category: 'tax',
-    description: '정기 세금 납부 (소득세 10% + 환경부담금 10P)',
-    createdAt: '2026-08-13T15:05:00Z',
-  },
-  {
-    id: 'ledger-s1-6',
-    userId: 'student-1',
-    amount: 300,
-    balanceAfter: 4140,
-    category: 'teacher_adjust',
-    description: '선생님 상점: 학급 환경미화 적극 동참 우수 표창',
-    createdAt: '2026-08-14T11:00:00Z',
-  },
-  {
-    id: 'ledger-s1-7',
-    userId: 'student-1',
-    amount: -250,
-    balanceAfter: 3890,
-    category: 'shop_purchase',
-    description: '상점 구매: 🍫 달콤 간식 보물상자',
-    createdAt: '2026-08-15T14:20:00Z',
-  },
-  {
-    id: 'ledger-s1-8',
-    userId: 'student-1',
-    amount: 650,
-    balanceAfter: 4540,
-    category: 'salary',
-    description: '8월 2주차 칠판 마스터 주급 + 성실 보너스 정산',
-    createdAt: '2026-08-16T16:00:00Z',
-  },
-  {
-    id: 'ledger-s1-9',
-    userId: 'student-1',
-    amount: 100,
-    balanceAfter: 4640,
-    category: 'quest_bonus',
-    description: '퀘스트 완료: 💼 오늘의 1인 1역 직업 수행 인증',
-    createdAt: '2026-08-17T14:00:00Z',
-  },
-  {
-    id: 'ledger-s1-10',
-    userId: 'student-1',
-    amount: -1200,
-    balanceAfter: 3440,
-    category: 'auction_bid',
-    description: '특권 경매 입찰: 👑 선생님과 1:1 맛있는 점심 식사 & 상담권',
-    createdAt: '2026-08-17T15:30:00Z',
-  },
-
-  // student-2 (김서연)
-  {
-    id: 'ledger-s2-1',
-    userId: 'student-2',
-    amount: 1000,
-    balanceAfter: 1000,
-    category: 'salary',
-    description: '학급 개설 기본 자금 지급',
-    createdAt: '2026-08-08T09:00:00Z',
-  },
-  {
-    id: 'ledger-s2-2',
-    userId: 'student-2',
-    amount: 550,
-    balanceAfter: 1550,
-    category: 'salary',
-    description: '1인 1역 주급 지급 (에너지 지킴이)',
-    createdAt: '2026-08-12T15:00:00Z',
-  },
-  {
-    id: 'ledger-s2-3',
-    userId: 'student-2',
-    amount: -65,
-    balanceAfter: 1485,
-    category: 'tax',
-    description: '정기 소득세 및 공공요금 공제',
-    createdAt: '2026-08-12T15:05:00Z',
-  },
-  {
-    id: 'ledger-s2-4',
-    userId: 'student-2',
-    amount: 405,
-    balanceAfter: 1890,
-    category: 'quest_bonus',
-    description: '퀘스트 완료 및 절약왕 저축 인센티브',
-    createdAt: '2026-08-15T10:00:00Z',
-  },
-
-  // student-3 (이도현)
-  {
-    id: 'ledger-s3-1',
-    userId: 'student-3',
-    amount: 1000,
-    balanceAfter: 1000,
-    category: 'salary',
-    description: '학급 개설 기본 자금 지급',
-    createdAt: '2026-08-08T09:00:00Z',
-  },
-  {
-    id: 'ledger-s3-2',
-    userId: 'student-3',
-    amount: -150,
-    balanceAfter: 850,
-    category: 'shop_purchase',
-    description: '상점 구매: 🎵 오늘의 학급 DJ 음악 신청권',
-    createdAt: '2026-08-10T12:00:00Z',
-  },
-  {
-    id: 'ledger-s3-3',
-    userId: 'student-3',
-    amount: 450,
-    balanceAfter: 1300,
-    category: 'salary',
-    description: '우유 급식 대장 주급 지급',
-    createdAt: '2026-08-12T15:00:00Z',
-  },
-  {
-    id: 'ledger-s3-4',
-    userId: 'student-3',
-    amount: 420,
-    balanceAfter: 1720,
-    category: 'quest_bonus',
-    description: '숙제 3건 연속 완수 보너스',
-    createdAt: '2026-08-16T11:00:00Z',
-  },
-
-  // student-7 (정예준) - 부채/마이너스 케이스
-  {
-    id: 'ledger-s7-1',
-    userId: 'student-7',
-    amount: 1000,
-    balanceAfter: 1000,
-    category: 'salary',
-    description: '학급 개설 기본 자금 지급',
-    createdAt: '2026-08-08T09:00:00Z',
-  },
-  {
-    id: 'ledger-s7-2',
-    userId: 'student-7',
-    amount: -800,
-    balanceAfter: 200,
-    category: 'shop_purchase',
-    description: '상점 구매: 👥 짝꿍 자유 선택 1일권',
-    createdAt: '2026-08-11T14:00:00Z',
-  },
-  {
-    id: 'ledger-s7-3',
-    userId: 'student-7',
-    amount: -240,
-    balanceAfter: -40,
-    category: 'tax',
-    description: '자리세 체납 및 미이행 벌금 부과',
-    createdAt: '2026-08-14T17:00:00Z',
-  },
-  {
-    id: 'ledger-s7-4',
-    userId: 'student-7',
-    amount: -80,
-    balanceAfter: -120,
-    category: 'tax',
-    description: '정기 세금 납부 및 마이너스 통장 연체료',
-    createdAt: '2026-08-15T16:00:00Z',
-  },
-];
+// 깨끗한 초기 통장 장부 (신규 거래 발생 시 1건씩 누적)
+export const INITIAL_POINT_LEDGER: PointLedger[] = [];
 
 export const INITIAL_AUCTION_ITEMS: AuctionItem[] = [
   {
     id: 'auction-1',
     title: '👑 [초특급] 선생님과 1:1 맛있는 점심 식사 & 상담권',
-    description: '원하는 점심 메뉴(피자/치킨/햄버거 세트)와 함께 선생님과 단둘이 오붓하게 진로와 학교생활을 상담할 수 있는 최고의 특권!',
+    description: '원하는 점심 메뉴와 함께 선생님과 단둘이 오붓하게 진로와 학교생활을 상담할 수 있는 최고의 특권!',
     icon: '🍕',
     startPrice: 800,
-    currentHighestBid: 1200,
-    currentHighestBidderId: 'student-1',
+    currentHighestBid: 800,
+    currentHighestBidderId: null,
     minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString(), // 2일 후 마감
+    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(), // 3일 후 마감
     status: 'ongoing',
     winnerId: null,
     winningPrice: null,
     category: 'privilege',
-    createdAt: '2026-08-15T10:00:00Z',
+    createdAt: '2026-08-23T00:00:00Z',
   },
   {
     id: 'auction-2',
@@ -994,15 +555,15 @@ export const INITIAL_AUCTION_ITEMS: AuctionItem[] = [
     description: '다음 주 월~금 아침 자습 시간과 청소 시간마다 내가 선정한 플레이리스트를 전교생/학급에 직접 방송할 수 있는 DJ 라이선스입니다.',
     icon: '🎧',
     startPrice: 500,
-    currentHighestBid: 750,
-    currentHighestBidderId: 'student-3',
+    currentHighestBid: 500,
+    currentHighestBidderId: null,
     minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 18).toISOString(), // 18시간 후 마감
+    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString(),
     status: 'ongoing',
     winnerId: null,
     winningPrice: null,
     category: 'special',
-    createdAt: '2026-08-15T12:00:00Z',
+    createdAt: '2026-08-23T00:00:00Z',
   },
   {
     id: 'auction-3',
@@ -1010,89 +571,16 @@ export const INITIAL_AUCTION_ITEMS: AuctionItem[] = [
     description: '선생님 바로 앞 TV 시야 100%, 칠판 명당자리를 자리세 없이 1주일간 독점하여 사용할 수 있는 특별 패스입니다.',
     icon: '💺',
     startPrice: 600,
-    currentHighestBid: 900,
-    currentHighestBidderId: 'student-2',
+    currentHighestBid: 600,
+    currentHighestBidderId: null,
     minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 36).toISOString(), // 36시간 후 마감
+    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 4).toISOString(),
     status: 'ongoing',
     winnerId: null,
     winningPrice: null,
     category: 'privilege',
-    createdAt: '2026-08-16T09:00:00Z',
-  },
-  {
-    id: 'auction-4',
-    title: '⚽ 체육 시간 자유 종목 결정권',
-    description: '체육 수업 때 축구, 피구, 배드민턴 중 학급 전체가 플레이할 종목 1개를 내가 직접 결정합니다.',
-    icon: '⚽',
-    startPrice: 400,
-    currentHighestBid: 550,
-    currentHighestBidderId: 'student-5',
-    minBidStep: 50,
-    endsAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 마감된 경매
-    status: 'ended',
-    winnerId: 'student-5',
-    winningPrice: 550,
-    category: 'experience',
-    createdAt: '2026-08-14T09:00:00Z',
+    createdAt: '2026-08-23T00:00:00Z',
   },
 ];
 
-export const INITIAL_AUCTION_BIDS: AuctionBid[] = [
-  {
-    id: 'bid-1',
-    auctionId: 'auction-1',
-    userId: 'student-2',
-    amount: 900,
-    bidAt: '2026-08-15T11:00:00Z',
-  },
-  {
-    id: 'bid-2',
-    auctionId: 'auction-1',
-    userId: 'student-4',
-    amount: 1050,
-    bidAt: '2026-08-15T14:30:00Z',
-  },
-  {
-    id: 'bid-3',
-    auctionId: 'auction-1',
-    userId: 'student-1',
-    amount: 1200,
-    bidAt: '2026-08-16T09:15:00Z',
-  },
-  {
-    id: 'bid-4',
-    auctionId: 'auction-2',
-    userId: 'student-6',
-    amount: 600,
-    bidAt: '2026-08-15T13:00:00Z',
-  },
-  {
-    id: 'bid-5',
-    auctionId: 'auction-2',
-    userId: 'student-3',
-    amount: 750,
-    bidAt: '2026-08-15T16:40:00Z',
-  },
-  {
-    id: 'bid-6',
-    auctionId: 'auction-3',
-    userId: 'student-1',
-    amount: 700,
-    bidAt: '2026-08-16T10:00:00Z',
-  },
-  {
-    id: 'bid-7',
-    auctionId: 'auction-3',
-    userId: 'student-2',
-    amount: 900,
-    bidAt: '2026-08-16T11:20:00Z',
-  },
-  {
-    id: 'bid-8',
-    auctionId: 'auction-4',
-    userId: 'student-5',
-    amount: 550,
-    bidAt: '2026-08-15T18:00:00Z',
-  },
-];
+export const INITIAL_AUCTION_BIDS: AuctionBid[] = [];

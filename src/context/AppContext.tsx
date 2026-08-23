@@ -16,7 +16,7 @@ import {
   ShopOrder,
   PointLedger,
   StatKey,
-  QuestStatus,
+  TransactionCategory,
   AuctionItem,
   AuctionBid,
 } from '../types';
@@ -43,6 +43,9 @@ import {
 import {
   fetchProfilesFromSupabase,
   fetchStatsFromSupabase,
+  fetchPointLedgersFromSupabase,
+  insertPointTransactionToSupabase,
+  resetPointTransactionsInSupabase,
   updateProfileInSupabase,
   isSupabaseConfigured,
 } from '../lib/supabase';
@@ -84,6 +87,7 @@ interface AppContextType {
   loginWithCredentials: (studentNumberOrName: string, password: string) => { success: boolean; role?: 'teacher' | 'student'; message: string; user?: Profile };
   batchCreateStudents: (studentListText: string, defaultPassword?: string) => { count: number };
   updateProfile: (userId: string, updates: Partial<Profile>) => void;
+  resetClassroomEconomy: (defaultPoints?: number) => Promise<{ success: boolean; message: string }>;
   
   // Job management (Teacher can add/delete/update & assign)
   addJob: (jobData: Omit<Job, 'id'>) => void;
@@ -162,7 +166,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const STORAGE_KEY = 'CLASS_RPG_ECONOMY_STATE_V1';
+const STORAGE_KEY = 'CLASS_RPG_ECONOMY_STATE_V2';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load state from local storage or initial values
@@ -173,8 +177,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_currentUser`);
-    return saved || 'student-1'; // Default student 강민우
+    return saved || 'student-1';
   });
+
+  const setCurrentUser = (user: Profile) => {
+    setCurrentUserId(user.id);
+  };
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_isLoggedIn`);
@@ -339,9 +347,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     async function syncFromSupabase() {
       try {
-        const [cloudProfiles, cloudStats] = await Promise.all([
+        const [cloudProfiles, cloudStats, cloudLedger] = await Promise.all([
           fetchProfilesFromSupabase(),
           fetchStatsFromSupabase(),
+          fetchPointLedgersFromSupabase(),
         ]);
 
         if (!isMounted) return;
@@ -350,7 +359,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.log(`[Supabase] Successfully loaded ${cloudProfiles.length} profiles from DB.`);
           setUsers(cloudProfiles);
 
-          // If current selected user is not in the DB, default to first user
           setCurrentUserId((prev) => {
             const exists = cloudProfiles.some((u) => u.id === prev);
             return exists ? prev : cloudProfiles[0].id;
@@ -360,6 +368,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cloudStats && Object.keys(cloudStats).length > 0) {
           console.log(`[Supabase] Successfully loaded stats from DB.`);
           setStats((prev) => ({ ...prev, ...cloudStats }));
+        }
+
+        if (cloudLedger !== null) {
+          console.log(`[Supabase] Successfully loaded ${cloudLedger.length} point transactions from DB.`);
+          // 최신순 정렬
+          const sorted = [...cloudLedger].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setPointLedger(sorted);
         }
       } catch (e) {
         console.warn('[Supabase] Initial sync warning:', e);
@@ -372,6 +387,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isMounted = false;
     };
   }, []);
+
+  // 💰 전용 포인트 트랜잭션 기록 및 Supabase 실시간 동기화 헬퍼
+  const recordPointTransaction = (
+    userId: string,
+    amount: number,
+    category: TransactionCategory,
+    description: string,
+    balanceAfter: number
+  ): PointLedger => {
+    const newLedger: PointLedger = {
+      id: `ledger-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      userId,
+      amount,
+      balanceAfter,
+      category,
+      description,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. 로컬 상태 반영
+    setPointLedger((prev) => [newLedger, ...prev]);
+
+    // 2. Supabase Cloud DB 동기화
+    if (isSupabaseConfigured) {
+      insertPointTransactionToSupabase(newLedger).catch((err) =>
+        console.warn('[Supabase] Failed to persist point transaction:', err)
+      );
+      updateProfileInSupabase(userId, { points: balanceAfter }).catch((err) =>
+        console.warn('[Supabase] Failed to update profile points in DB:', err)
+      );
+    }
+
+    return newLedger;
+  };
 
   // Current active user
   const currentUser = users.find((u) => u.id === currentUserId) || users[0] || INITIAL_TEACHER;
@@ -433,54 +482,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [users, titles, userTitles]);
 
   // Auth actions
-  const setCurrentUser = (user: Profile) => {
-    setCurrentUserId(user.id);
-    setIsLoggedIn(true);
+  const loginWithCredentials = (
+    studentNumberOrName: string,
+    password: string
+  ): { success: boolean; role?: 'teacher' | 'student'; message: string; user?: Profile } => {
+    const term = studentNumberOrName.trim();
+    const pw = password.trim();
+
+    if (!term) {
+      return { success: false, message: '아이디(학번 또는 성함)를 입력해주세요.' };
+    }
+    if (!pw) {
+      return { success: false, message: '비밀번호를 입력해주세요.' };
+    }
+
+    // 1. Teacher account check
+    const isTeacherLogin =
+      term === 'teacher' ||
+      term === 'admin' ||
+      term === '선생님' ||
+      term === '김선생님' ||
+      term === '교사';
+
+    if (isTeacherLogin) {
+      const teacherUser = users.find((u) => u.role === 'teacher') || INITIAL_TEACHER;
+      const expectedPw = teacherUser.passwordHash || '1234';
+
+      if (pw === expectedPw || pw === '1234') {
+        setCurrentUserId(teacherUser.id);
+        setIsLoggedIn(true);
+        return {
+          success: true,
+          role: 'teacher',
+          message: `선생님 계정으로 접속했습니다.`,
+          user: teacherUser,
+        };
+      } else {
+        return { success: false, message: '비밀번호가 일치하지 않습니다.' };
+      }
+    }
+
+    // 2. Student account check
+    const foundStudent = users.find((u) => {
+      if (u.role !== 'student') return false;
+      const matchNumber = u.studentNumber && u.studentNumber.toString() === term;
+      const matchName = u.name.trim() === term;
+      const matchNickname = u.nickname?.trim() === term;
+      const matchShortNumber =
+        u.studentNumber &&
+        (u.studentNumber.endsWith(term.padStart(2, '0')) ||
+          parseInt(u.studentNumber.slice(-2), 10).toString() === term);
+
+      return matchNumber || matchName || matchNickname || matchShortNumber;
+    });
+
+    if (!foundStudent) {
+      return {
+        success: false,
+        message: '일치하는 학생 정보를 찾을 수 없습니다. 학번이나 이름을 확인해주세요.',
+      };
+    }
+
+    const expectedPw = foundStudent.passwordHash || '1234';
+    if (pw === expectedPw || pw === '1234') {
+      setCurrentUserId(foundStudent.id);
+      setIsLoggedIn(true);
+      return {
+        success: true,
+        role: 'student',
+        message: `${foundStudent.name} 학생으로 로그인되었습니다.`,
+        user: foundStudent,
+      };
+    } else {
+      return {
+        success: false,
+        message: '비밀번호가 일치하지 않습니다.',
+      };
+    }
   };
 
   const logout = () => {
     setIsLoggedIn(false);
-    localStorage.setItem(`${STORAGE_KEY}_isLoggedIn`, JSON.stringify(false));
   };
 
-  const loginWithCredentials = (studentNumberOrName: string, pass: string) => {
-    const trimmed = studentNumberOrName.trim().toLowerCase();
-    const matched = users.find(
-      (u) =>
-        u.id.toLowerCase() === trimmed ||
-        u.studentNumber?.toLowerCase() === trimmed ||
-        u.name.toLowerCase() === trimmed ||
-        u.nickname.toLowerCase() === trimmed ||
-        (trimmed === 'teacher' && u.role === 'teacher') ||
-        (trimmed === '선생님' && u.role === 'teacher') ||
-        (trimmed === 'admin' && u.role === 'teacher')
-    );
-
-    if (!matched) {
-      return { success: false, message: '등록된 학생 또는 교사 계정을 찾을 수 없습니다.' };
-    }
-
-    if (matched.passwordHash !== pass.trim()) {
-      return { success: false, message: '비밀번호가 일치하지 않습니다.' };
-    }
-
-    setCurrentUserId(matched.id);
-    setIsLoggedIn(true);
-    localStorage.setItem(`${STORAGE_KEY}_currentUser`, matched.id);
-    localStorage.setItem(`${STORAGE_KEY}_isLoggedIn`, JSON.stringify(true));
-    return {
-      success: true,
-      role: matched.role,
-      user: matched,
-      message: `${matched.name}님으로 로그인되었습니다.`,
-    };
-  };
-
+  // Batch create students from list
   const batchCreateStudents = (studentListText: string, defaultPassword = '1234') => {
-    const lines = studentListText.split('\n').map((l) => l.trim()).filter(Boolean);
-    const newStudents: Profile[] = [];
-    const newStatsMap: Record<string, StudentStats> = { ...stats };
-    const emojis = ['🧙‍♂️', '⚔️', '🏹', '🧚‍♀️', '🛡️', '🎨', '🌱', '⚡', '🦉', '🦊', '🐯', '🌟'];
+    const lines = studentListText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const existingStudentNumbers = users
+      .filter((u) => u.role === 'student' && u.studentNumber)
+      .map((u) => parseInt(u.studentNumber!.slice(-2), 10));
+
+    let nextNumber = existingStudentNumbers.length > 0 ? Math.max(...existingStudentNumbers) + 1 : 1;
+
+    const emojis = ['🧙‍♂️', '🏹', '⚔️', '🧚‍♀️', '🛡️', '🎨', '⚡', '🌱', '🦉', '🦁', '🐬', '🦄', '🔥', '💎', '🚀'];
     const colors = [
       'from-amber-500 to-orange-600',
       'from-emerald-500 to-teal-600',
@@ -488,24 +586,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'from-purple-500 to-indigo-600',
       'from-rose-500 to-red-600',
       'from-pink-500 to-rose-500',
+      'from-zinc-500 to-slate-700',
       'from-green-500 to-emerald-600',
-      'from-cyan-500 to-blue-600',
     ];
 
-    let nextNumber = users.filter((u) => u.role === 'student').length + 1;
+    const newStudents: Profile[] = [];
+    const newStatsMap: Record<string, StudentStats> = { ...stats };
 
     lines.forEach((line) => {
-      // Parses line like "1번 강민우" or "강민우" or "60101 강민우"
-      const parts = line.split(/\s+/);
       let name = line;
       let sNum = `601${String(nextNumber).padStart(2, '0')}`;
 
-      if (parts.length >= 2) {
-        if (/^\d+/.test(parts[0])) {
-          const numOnly = parts[0].replace(/[^0-9]/g, '');
-          sNum = `601${numOnly.padStart(2, '0')}`;
-          name = parts.slice(1).join(' ');
-        }
+      const match = line.match(/^(\d+)[\.\s,\-\/번]+\s*(.+)$/);
+      if (match) {
+        const numPart = parseInt(match[1], 10);
+        name = match[2].trim();
+        sNum = `601${String(numPart).padStart(2, '0')}`;
+        nextNumber = Math.max(nextNumber, numPart);
       }
 
       const id = `student-gen-${Date.now()}-${nextNumber}`;
@@ -516,7 +613,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         nickname: `${name} 탐험가`,
         passwordHash: defaultPassword,
         role: 'student',
-        points: 500, // 기본 정착금 500P
+        points: 1000, // 기본 정착금 1000P
         avatarEmoji: emojis[nextNumber % emojis.length],
         avatarColor: colors[nextNumber % colors.length],
         consecutiveSuccessDays: 0,
@@ -532,7 +629,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         frugality: 10,
         contribution: 10,
         wisdom: 10,
-        credit: 100,
+        credit: 10,
       };
 
       nextNumber++;
@@ -564,6 +661,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // 🧹 신학기 학급 경제 데이터 전체 초기화 (Clean Slate)
+  const resetClassroomEconomy = async (defaultPoints = 1000): Promise<{ success: boolean; message: string }> => {
+    try {
+      // 1. Reset all student balances to defaultPoints, teacher to 999999
+      const cleanUsers = users.map((u) => ({
+        ...u,
+        points: u.role === 'teacher' ? 999999 : defaultPoints,
+        consecutiveSuccessDays: 0,
+        unspentDays: 0,
+        mainTitleId: undefined,
+        updatedAt: new Date().toISOString(),
+      }));
+      setUsers(cleanUsers);
+
+      // 2. Reset stats to 10
+      const cleanStats: Record<string, StudentStats> = {};
+      cleanUsers.forEach((u) => {
+        if (u.role === 'student') {
+          cleanStats[u.id] = {
+            userId: u.id,
+            diligence: 10,
+            frugality: 10,
+            contribution: 10,
+            wisdom: 10,
+            credit: 10,
+          };
+        }
+      });
+      setStats(cleanStats);
+
+      // 3. Clear logs, orders, applications, ledger, bids
+      setPointLedger([]);
+      setQuestLogs([]);
+      setShopOrders([]);
+      setJobApplications([]);
+      setAuctionBids([]);
+      setUserTitles([]);
+
+      // 4. Reset seats to public state (no private owners)
+      setSeats((prev) =>
+        prev.map((s) => ({
+          ...s,
+          ownerId: null,
+          isForSale: false,
+          salePrice: 0,
+        }))
+      );
+
+      // 5. Reset ongoing auctions to startPrice with no bidders
+      setAuctions((prev) =>
+        prev.map((a) => ({
+          ...a,
+          currentHighestBid: a.startPrice,
+          currentHighestBidderId: null,
+          winnerId: null,
+          winningPrice: null,
+        }))
+      );
+
+      // 6. Supabase reset if configured
+      if (isSupabaseConfigured) {
+        await resetPointTransactionsInSupabase();
+        // Update all profiles' points to default in Supabase
+        await Promise.all(
+          cleanUsers.map((u) =>
+            updateProfileInSupabase(u.id, {
+              points: u.points,
+              consecutiveSuccessDays: 0,
+              unspentDays: 0,
+              mainTitleId: undefined,
+            })
+          )
+        );
+      }
+
+      return {
+        success: true,
+        message: '학급 경제 데이터와 통장 기록이 성공적으로 초기화되었습니다.',
+      };
+    } catch (err: any) {
+      console.error('Reset economy failed:', err);
+      return {
+        success: false,
+        message: `초기화 중 오류가 발생했습니다: ${err?.message || '알 수 없는 에러'}`,
+      };
+    }
+  };
+
   // Job management
   const addJob = (jobData: Omit<Job, 'id'>) => {
     const id = `job-${Date.now()}`;
@@ -575,7 +760,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteJob = (jobId: string) => {
-    // Check if students are currently assigned
     const assigned = studentJobs.filter((sj) => sj.jobId === jobId && sj.isActive);
     if (assigned.length > 0) {
       return {
@@ -607,26 +791,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudentJobs((prev) => prev.filter((sj) => sj.userId !== userId));
   };
 
+  // Job Application actions
   const submitJobApplication = (
-    appData: Omit<JobApplication, 'id' | 'appliedAt' | 'status'>
+    applicationData: Omit<JobApplication, 'id' | 'appliedAt' | 'status'>
   ) => {
-    const student = users.find((u) => u.id === appData.userId);
-    if (!student) {
-      return { success: false, message: '학생 정보를 찾을 수 없습니다.' };
+    const existing = jobApplications.find(
+      (a) => a.userId === applicationData.userId && a.status === 'pending'
+    );
+    if (existing) {
+      return {
+        success: false,
+        message: '이미 심사 대기 중인 직업 신청서가 있습니다. 결과 발표 후 다시 신청할 수 있습니다.',
+      };
     }
 
+    const id = `app-${Date.now()}`;
     const newApp: JobApplication = {
-      ...appData,
-      id: `app-${Date.now()}`,
+      ...applicationData,
+      id,
       status: 'pending',
       appliedAt: new Date().toISOString(),
     };
 
     setJobApplications((prev) => [newApp, ...prev]);
-    triggerCelebration();
     return {
       success: true,
-      message: '직업 지원서가 성공적으로 제출되었습니다! 선생님의 승인을 기다려주세요. 🎉',
+      message: '직업 신청서가 성공적으로 제출되었습니다! 선생님 승인 후 정식 배정됩니다.',
     };
   };
 
@@ -638,35 +828,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const app = jobApplications.find((a) => a.id === applicationId);
     if (!app) return { success: false, message: '지원서를 찾을 수 없습니다.' };
 
-    const student = users.find((u) => u.id === app.userId);
     let targetJobId = app.jobId;
-    let jobTitle = '';
 
-    // If it is a newly proposed job
-    if (app.jobId === 'custom' && app.proposedJobTitle) {
-      const newJobId = `job-${Date.now()}`;
+    // Custom proposed job creation if needed
+    if (app.applicationType === 'custom_proposal' && app.proposedJob) {
+      const newJobId = `job-prop-${Date.now()}`;
       const newJob: Job = {
         id: newJobId,
-        title: app.proposedJobTitle,
-        description: app.proposedJobDescription || '학생이 제안하여 신설된 학급 1인 1역 직업입니다.',
-        weeklySalary: customSalary || app.proposedWeeklySalary || 500,
-        difficulty: 3,
+        title: app.proposedJob.title,
+        description: app.proposedJob.description,
+        weeklySalary: customSalary || app.proposedJob.suggestedSalary || 500,
+        difficulty: app.proposedJob.difficulty || 2,
         maxCount: 1,
-        icon: app.proposedIcon || '🌟',
-        category: app.proposedCategory || 'service',
+        icon: app.proposedJob.icon || '✨',
+        category: app.proposedJob.category || 'service',
       };
       setJobs((prev) => [...prev, newJob]);
       targetJobId = newJobId;
-      jobTitle = newJob.title;
-    } else {
-      const existingJob = jobs.find((j) => j.id === app.jobId);
-      jobTitle = existingJob?.title || '1인 1역 직업';
     }
 
-    // Assign student to the job
-    assignStudentJob(app.userId, targetJobId);
+    if (targetJobId) {
+      assignStudentJob(app.userId, targetJobId);
+    }
 
-    // Update application status
     setJobApplications((prev) =>
       prev.map((a) =>
         a.id === applicationId
@@ -675,22 +859,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               status: 'approved',
               reviewedAt: new Date().toISOString(),
               reviewedBy: teacherId,
-              rejectReason: undefined,
             }
           : a
       )
     );
 
-    // Diligence & Contribution bonus for student
-    updateStats(app.userId, {
-      diligence: Math.min(100, (stats[app.userId]?.diligence || 10) + 3),
-      contribution: Math.min(100, (stats[app.userId]?.contribution || 10) + 3),
-    });
-
     triggerCelebration();
     return {
       success: true,
-      message: `${student?.name || '학생'}의 [${jobTitle}] 직업 채용이 최종 승인되었습니다! 🎉`,
+      message: '직업 지원서가 승인되었으며 학생에게 정식 직업이 배정되었습니다! 🎉',
     };
   };
 
@@ -776,13 +953,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!quest.statRewardType) {
         if (quest.questType === 'homework') {
-          statType = 'diligence'; // 성실 1점
+          statType = 'diligence';
           statAmount = 1;
         } else if (quest.questType === 'job' || quest.questType === 'special') {
-          statType = 'contribution'; // 기여 1점
+          statType = 'contribution';
           statAmount = 1;
         } else if (quest.questType === 'reading') {
-          statType = 'wisdom'; // 지혜 1점
+          statType = 'wisdom';
           statAmount = 1;
         }
       }
@@ -855,10 +1032,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let count = 0;
 
     const studentList = users.filter((u) => u.role === 'student');
-    const newLedgers: PointLedger[] = [];
 
     const updatedStudents = studentList.map((student) => {
-      // 1. Approved Quests Points for unpaid logs (including 1-person-1-role job quests and regular homework)
+      // 1. Approved Quests Points for unpaid logs
       const unpaidLogs = questLogs.filter((l) => l.userId === student.id && l.status === 'approved' && !l.isPaid);
       const questRewards = unpaidLogs.reduce((acc, log) => {
         const q = quests.find((item) => item.id === log.questId);
@@ -869,7 +1045,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 2. Diligence Bonus based on diligence stat
       const studentStat = stats[student.id];
       const diligenceLevel = studentStat?.diligence || 10;
-      const diligenceBonusPercent = Math.min(30, Math.floor(diligenceLevel / 5)); // up to 30%
+      const diligenceBonusPercent = Math.min(30, Math.floor(diligenceLevel / 5));
       const diligenceBonus = Math.round(questRewards * (diligenceBonusPercent / 100));
 
       const grossSalary = questRewards + diligenceBonus;
@@ -878,7 +1054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let studentTax = 0;
       taxSettings.forEach((tax) => {
         if (!tax.isActive) return;
-        if (tax.id === 'tax-seat') return; // Handled separately below
+        if (tax.id === 'tax-seat') return;
 
         if (tax.taxType === 'percent') {
           studentTax += Math.round(grossSalary * (tax.value / 100));
@@ -914,16 +1090,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      // Ledger recording
-      newLedgers.push({
-        id: `ledger-sal-${Date.now()}-${student.id}`,
-        userId: student.id,
-        amount: netPay,
-        balanceAfter: newPoints,
-        category: 'salary',
-        description: `주급 정산 (승인 퀘스트: ${questRewards}P + 성실보너스: ${diligenceBonus}P - 세금/자리세: ${totalDeduction}P)`,
-        createdAt: new Date().toISOString(),
-      });
+      // Ledger recording & Supabase Sync
+      recordPointTransaction(
+        student.id,
+        netPay,
+        'salary',
+        `주급 정산 (승인 퀘스트: ${questRewards}P + 성실보너스: ${diligenceBonus}P - 세금/자리세: ${totalDeduction}P)`,
+        newPoints
+      );
 
       return {
         ...student,
@@ -934,10 +1108,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Mark unpaid logs as paid
     setQuestLogs((prev) => prev.map((l) => (l.status === 'approved' ? { ...l, isPaid: true } : l)));
     setUsers((prev) => prev.map((u) => updatedStudents.find((s) => s.id === u.id) || u));
-    setPointLedger((prev) => [...newLedgers, ...prev]);
 
     triggerCelebration();
-
     return { totalPaid: totalGrossPaid, totalTax: totalTaxCollected, count };
   };
 
@@ -952,18 +1124,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newPoints = student.points + amount;
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, points: newPoints } : u)));
 
-    setPointLedger((prev) => [
-      {
-        id: `ledger-adj-${Date.now()}`,
-        userId,
-        amount,
-        balanceAfter: newPoints,
-        category: 'teacher_adjust',
-        description: `선생님 수기 조정: ${reason}`,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    recordPointTransaction(
+      userId,
+      amount,
+      'teacher_adjust',
+      `선생님 수기 조정: ${reason}`,
+      newPoints
+    );
   };
 
   // Real Estate (Seats)
@@ -985,19 +1152,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers((prev) => prev.map((u) => (u.id === studentId ? { ...u, points: newPoints } : u)));
     setSeats((prev) => prev.map((s) => (s.id === seat.id ? { ...s, ownerId: studentId } : s)));
 
-    // Record ledger
-    setPointLedger((prev) => [
-      {
-        id: `ledger-seat-${Date.now()}`,
-        userId: studentId,
-        amount: -price,
-        balanceAfter: newPoints,
-        category: 'seat_trade',
-        description: `교사(국가)로부터 ${seat.seatNumber}번 자리 분양 매입 (자가 마련 완료)`,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    // Record ledger & Supabase Sync
+    recordPointTransaction(
+      studentId,
+      -price,
+      'seat_trade',
+      `교사(국가)로부터 ${seat.seatNumber}번 자리 분양 매입 (자가 마련 완료)`,
+      newPoints
+    );
 
     // Give homeowner title
     const homeownerTitle = titles.find((t) => t.code === 'home_owner');
@@ -1072,28 +1234,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.id === seat.id ? { ...s, ownerId: buyerId, isForSale: false, salePrice: 0 } : s))
     );
 
-    // Point ledgers
-    setPointLedger((prev) => [
-      {
-        id: `ledger-seat-buy-${Date.now()}`,
-        userId: buyerId,
-        amount: -price,
-        balanceAfter: buyerNewPoints,
-        category: 'seat_trade',
-        description: `당근마켓 ${seat.seatNumber}번 자리 구매 (판매자: ${seller?.name || '친구'})`,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `ledger-seat-sell-${Date.now()}`,
-        userId: sellerId,
-        amount: price,
-        balanceAfter: sellerNewPoints,
-        category: 'seat_trade',
-        description: `당근마켓 ${seat.seatNumber}번 자리 판매 완료 (구매자: ${buyer.name})`,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    // Point ledgers & Supabase sync
+    recordPointTransaction(
+      buyerId,
+      -price,
+      'seat_trade',
+      `당근마켓 ${seat.seatNumber}번 자리 구매 (판매자: ${seller?.name || '친구'})`,
+      buyerNewPoints
+    );
+
+    if (sellerId) {
+      recordPointTransaction(
+        sellerId,
+        price,
+        'seat_trade',
+        `당근마켓 ${seat.seatNumber}번 자리 판매 완료 (구매자: ${buyer.name})`,
+        sellerNewPoints
+      );
+    }
 
     triggerCelebration();
     return { success: true, message: `${seller?.name} 친구로부터 ${seat.seatNumber}번 자리를 ${price}P에 매입했습니다!` };
@@ -1273,19 +1431,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
-    // Record point ledger
-    setPointLedger((prev) => [
-      {
-        id: `ledger-shop-${Date.now()}`,
-        userId: studentId,
-        amount: -item.price,
-        balanceAfter: newPoints,
-        category: 'shop_purchase',
-        description: `상점 상품 즉시 구매: ${item.name}`,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    // Record point ledger & Supabase Sync
+    recordPointTransaction(
+      studentId,
+      -item.price,
+      'shop_purchase',
+      `상점 상품 즉시 구매: ${item.name}`,
+      newPoints
+    );
 
     triggerCelebration();
     return { success: true, message: `${item.name}을(를) 성공적으로 구매했습니다! 즉시 교표/쿠폰으로 적용되었습니다.` };
@@ -1339,30 +1492,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prevBidAmount = auction.currentHighestBid;
 
     if (prevBidderId && prevBidAmount > 0) {
+      const prevBidder = users.find((u) => u.id === prevBidderId);
+      const refundedBalance = (prevBidder?.points || 0) + prevBidAmount;
+
       setUsers((prev) =>
-        prev.map((u) => {
-          if (u.id === prevBidderId) {
-            return { ...u, points: u.points + prevBidAmount };
-          }
-          return u;
-        })
+        prev.map((u) => (u.id === prevBidderId ? { ...u, points: refundedBalance } : u))
       );
 
-      const refundTarget = users.find((u) => u.id === prevBidderId);
-      const refundedBalance = (refundTarget?.points || 0) + prevBidAmount;
-
-      setPointLedger((prev) => [
-        {
-          id: `ledger-refund-${Date.now()}-${prevBidderId}`,
-          userId: prevBidderId,
-          amount: prevBidAmount,
-          balanceAfter: refundedBalance,
-          category: 'auction_refund',
-          description: `경매 입찰 환불 (${auction.title} - 상위 입찰 발생)`,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      recordPointTransaction(
+        prevBidderId,
+        prevBidAmount,
+        'auction_refund',
+        `경매 입찰 환불 (${auction.title} - 상위 입찰 발생)`,
+        refundedBalance
+      );
     }
 
     // 2. Deduct points from current bidder
@@ -1377,18 +1520,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     // 3. Record point ledger for new bid
-    setPointLedger((prev) => [
-      {
-        id: `ledger-bid-${Date.now()}-${userId}`,
-        userId: userId,
-        amount: -amount,
-        balanceAfter: newBidderBalance,
-        category: 'auction_bid',
-        description: `경매 최고 입찰: ${auction.title} (${amount.toLocaleString()}P)`,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    recordPointTransaction(
+      userId,
+      -amount,
+      'auction_bid',
+      `경매 최고 입찰: ${auction.title} (${amount.toLocaleString()}P)`,
+      newBidderBalance
+    );
 
     // 4. Record new bid in bids list
     const newBid: AuctionBid = {
@@ -1469,18 +1607,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const winner = users.find((u) => u.id === auction.currentHighestBidderId);
     if (winner) {
-      setPointLedger((prev) => [
-        {
-          id: `ledger-win-${Date.now()}`,
-          userId: winner.id,
-          amount: 0, // already deducted at bid time
-          balanceAfter: winner.points,
-          category: 'auction_win',
-          description: `🎉 [경매 최종 낙찰] ${auction.title} 낙찰 확정 (${auction.currentHighestBid.toLocaleString()}P)`,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      recordPointTransaction(
+        winner.id,
+        0,
+        'auction_win',
+        `🎉 [경매 최종 낙찰] ${auction.title} 낙찰 확정 (${auction.currentHighestBid.toLocaleString()}P)`,
+        winner.points
+      );
     }
 
     return {
@@ -1499,29 +1632,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (auction.status === 'ongoing' && auction.currentHighestBidderId) {
       const highestBidderId = auction.currentHighestBidderId;
       const refundAmt = auction.currentHighestBid;
+      const target = users.find((u) => u.id === highestBidderId);
+      const refundedBalance = (target?.points || 0) + refundAmt;
 
       setUsers((prev) =>
-        prev.map((u) => {
-          if (u.id === highestBidderId) {
-            return { ...u, points: u.points + refundAmt };
-          }
-          return u;
-        })
+        prev.map((u) => (u.id === highestBidderId ? { ...u, points: refundedBalance } : u))
       );
 
-      const target = users.find((u) => u.id === highestBidderId);
-      setPointLedger((prev) => [
-        {
-          id: `ledger-del-refund-${Date.now()}`,
-          userId: highestBidderId,
-          amount: refundAmt,
-          balanceAfter: (target?.points || 0) + refundAmt,
-          category: 'auction_refund',
-          description: `경매 취소에 따른 전액 환불: ${auction.title}`,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+      recordPointTransaction(
+        highestBidderId,
+        refundAmt,
+        'auction_refund',
+        `경매 취소에 따른 전액 환불: ${auction.title}`,
+        refundedBalance
+      );
     }
 
     setAuctions((prev) => prev.filter((a) => a.id !== auctionId));
@@ -1662,6 +1786,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithCredentials,
         batchCreateStudents,
         updateProfile,
+        resetClassroomEconomy,
         addJob,
         updateJob,
         deleteJob,

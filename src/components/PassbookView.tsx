@@ -831,56 +831,30 @@ export const PassbookView: React.FC = () => {
           >
             전체 날짜
           </button>
-          <button
-            onClick={() => setSelectedDateFilter('2026-08-17')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
-              selectedDateFilter === '2026-08-17'
-                ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            오늘 (8/17)
-          </button>
-          <button
-            onClick={() => setSelectedDateFilter('2026-08-16')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
-              selectedDateFilter === '2026-08-16'
-                ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            어제 (8/16)
-          </button>
-          <button
-            onClick={() => setSelectedDateFilter('2026-08-15')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
-              selectedDateFilter === '2026-08-15'
-                ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            8/15 (토)
-          </button>
-          <button
-            onClick={() => setSelectedDateFilter('2026-08-14')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
-              selectedDateFilter === '2026-08-14'
-                ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            8/14 (금)
-          </button>
-          <button
-            onClick={() => setSelectedDateFilter('2026-08-10')}
-            className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
-              selectedDateFilter === '2026-08-10'
-                ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            8/10 (월)
-          </button>
+          {(() => {
+            const today = new Date();
+            const dates = [0, 1, 2, 3].map((offset) => {
+              const d = new Date(today);
+              d.setDate(today.getDate() - offset);
+              const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              const label = offset === 0 ? `오늘 (${d.getMonth() + 1}/${d.getDate()})` : offset === 1 ? `어제 (${d.getMonth() + 1}/${d.getDate()})` : `${d.getMonth() + 1}/${d.getDate()}`;
+              return { ymd, label };
+            });
+
+            return dates.map(({ ymd, label }) => (
+              <button
+                key={ymd}
+                onClick={() => setSelectedDateFilter(ymd)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold shrink-0 transition cursor-pointer border ${
+                  selectedDateFilter === ymd
+                    ? 'bg-amber-400 text-slate-900 border-amber-500 font-extrabold shadow-2xs'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {label}
+              </button>
+            ));
+          })()}
         </div>
 
         {/* Date Filter Active Highlight Banner */}
