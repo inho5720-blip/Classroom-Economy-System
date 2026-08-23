@@ -160,6 +160,7 @@ export const TeacherAdminView: React.FC = () => {
   const [newShopIcon, setNewShopIcon] = useState('🎟️');
 
   const [editingShopItem, setEditingShopItem] = useState<ShopItem | null>(null);
+  const [deletingShopItemTarget, setDeletingShopItemTarget] = useState<ShopItem | null>(null);
   const [editShopName, setEditShopName] = useState('');
   const [editShopDesc, setEditShopDesc] = useState('');
   const [editShopPrice, setEditShopPrice] = useState(200);
@@ -455,10 +456,14 @@ export const TeacherAdminView: React.FC = () => {
   };
 
   const handleDeleteShopItemConfirm = (item: ShopItem) => {
-    if (confirm(`'${item.name}' 상품을 정말로 삭제하시겠습니까?`)) {
-      deleteShopItem(item.id);
-      showToast(`'${item.name}' 상품이 삭제되었습니다.`);
-    }
+    setDeletingShopItemTarget(item);
+  };
+
+  const handleExecuteDeleteShopItem = () => {
+    if (!deletingShopItemTarget) return;
+    deleteShopItem(deletingShopItemTarget.id);
+    showToast(`'${deletingShopItemTarget.name}' 상품이 삭제되었습니다.`);
+    setDeletingShopItemTarget(null);
   };
 
   return (
@@ -2829,7 +2834,7 @@ export const TeacherAdminView: React.FC = () => {
                   <span>학급 경제 데이터 클린 초기화 (신학기 시작)</span>
                 </div>
                 <p className="text-xs text-slate-600">
-                  이전 테스트로 발생한 모든 전자 통장 거래 기록, 퀘스트 승인 내역, 상점 주문 내역을 말끔히 비우고 모든 학생의 포인트를 초기값(1,000P)으로 재설정합니다. (Supabase 연결 시 DB도 함께 초기화됩니다)
+                  이전 테스트로 발생한 모든 전자 통장 거래 기록, 퀘스트 승인 내역, 상점 주문 내역을 말끔히 비우고 모든 학생의 포인트를 초기값(500P) 및 5대 스탯을 1로 재설정합니다. (Supabase 연결 시 DB도 함께 초기화됩니다)
                 </p>
               </div>
 
@@ -2907,7 +2912,7 @@ export const TeacherAdminView: React.FC = () => {
                   <p className="font-bold">초기화 시 다음 데이터가 삭제 및 리셋됩니다:</p>
                   <ul className="list-disc pl-4 space-y-1 text-slate-600">
                     <li>모든 전자 통장 거래 내역 (입출금 로그) 초기화</li>
-                    <li>모든 학생 포인트 기본값(1,000P)으로 재설정</li>
+                    <li>모든 학생 포인트 기본값(500P) 및 5대 스탯(각 1)으로 재설정</li>
                     <li>퀘스트 신청 및 승인 내역 초기화</li>
                     <li>상점 구매 주문 내역 초기화</li>
                     <li>연동된 Supabase DB 테이블 내역 동기화 삭제</li>
@@ -2928,7 +2933,7 @@ export const TeacherAdminView: React.FC = () => {
                       setIsResetting(true);
                       try {
                         await resetClassroomEconomy();
-                        showToast('학급 경제 데이터가 깨끗하게 초기화되었습니다! (학생 기본 1,000P)');
+                        showToast('학급 경제 데이터가 깨끗하게 초기화되었습니다! (학생 기본 500P / 스탯 1)');
                         setShowResetConfirmModal(false);
                       } catch (err) {
                         showToast('초기화 중 오류가 발생했습니다.');
@@ -3601,6 +3606,53 @@ CREATE POLICY "Allow public read-write for point transactions" ON public.point_t
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Shop Item Confirmation */}
+      {deletingShopItemTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-xl">
+                🗑️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-850">상품 삭제 확인</h3>
+                <p className="text-xs text-slate-500">상점에서 해당 상품을 완전히 삭제합니다.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{deletingShopItemTarget.icon}</span>
+                <span className="font-bold text-slate-850">{deletingShopItemTarget.name}</span>
+                <span className="font-mono text-amber-700 font-bold ml-auto">{deletingShopItemTarget.price.toLocaleString()} P</span>
+              </div>
+              <p className="text-slate-500 text-[11px]">{deletingShopItemTarget.description}</p>
+              <p className="text-rose-600 font-semibold text-[11px] pt-1 border-t border-slate-200">
+                삭제 후에는 학생들이 상점에서 이 상품을 더 이상 구매할 수 없습니다.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingShopItemTarget(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeleteShopItem}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>삭제하기</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -172,7 +172,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Load state from local storage or initial values
   const [users, setUsers] = useState<Profile[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_users`);
-    return saved ? JSON.parse(saved) : [INITIAL_TEACHER, ...INITIAL_STUDENTS];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Profile[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse saved users', e);
+      }
+    }
+    return [INITIAL_TEACHER, ...INITIAL_STUDENTS];
   });
 
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
@@ -490,75 +500,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const pw = password.trim();
 
     if (!term) {
-      return { success: false, message: '아이디(학번 또는 성함)를 입력해주세요.' };
+      return { success: false, message: '아이디(학번, 아이디 또는 성함)를 입력해주세요.' };
     }
     if (!pw) {
       return { success: false, message: '비밀번호를 입력해주세요.' };
     }
 
-    // 1. Teacher account check
-    const isTeacherLogin =
-      term === 'teacher' ||
-      term === 'admin' ||
-      term === '선생님' ||
-      term === '김선생님' ||
-      term === '교사';
+    const termLower = term.toLowerCase();
 
-    if (isTeacherLogin) {
-      const teacherUser = users.find((u) => u.role === 'teacher') || INITIAL_TEACHER;
-      const expectedPw = teacherUser.passwordHash || '1234';
+    // Look for matching user directly in `users` (which loads from Supabase DB `profiles`)
+    // Supports studentNumber (e.g. inho5720, 60101), id (e.g. teacher-1, student-1), name (e.g. 6학년 담임선생님), or nickname
+    const targetUser = users.find((u) => {
+      const matchId = u.id?.toLowerCase() === termLower;
+      const matchStudentNum = u.studentNumber && u.studentNumber.toString().toLowerCase() === termLower;
+      const matchName = u.name?.trim().toLowerCase() === termLower;
+      const matchNickname = u.nickname && u.nickname.trim().toLowerCase() === termLower;
 
-      if (pw === expectedPw || pw === '1234') {
-        setCurrentUserId(teacherUser.id);
-        setIsLoggedIn(true);
-        return {
-          success: true,
-          role: 'teacher',
-          message: `선생님 계정으로 접속했습니다.`,
-          user: teacherUser,
-        };
-      } else {
-        return { success: false, message: '비밀번호가 일치하지 않습니다.' };
-      }
-    }
-
-    // 2. Student account check
-    const foundStudent = users.find((u) => {
-      if (u.role !== 'student') return false;
-      const matchNumber = u.studentNumber && u.studentNumber.toString() === term;
-      const matchName = u.name.trim() === term;
-      const matchNickname = u.nickname?.trim() === term;
+      // Suffix match for numeric student numbers (e.g. student number 60101 matching '1' or '01')
       const matchShortNumber =
+        u.role === 'student' &&
         u.studentNumber &&
+        /^\d+$/.test(u.studentNumber) &&
         (u.studentNumber.endsWith(term.padStart(2, '0')) ||
           parseInt(u.studentNumber.slice(-2), 10).toString() === term);
 
-      return matchNumber || matchName || matchNickname || matchShortNumber;
+      return matchStudentNum || matchId || matchName || matchNickname || matchShortNumber;
     });
 
-    if (!foundStudent) {
+    if (!targetUser) {
       return {
         success: false,
-        message: '일치하는 학생 정보를 찾을 수 없습니다. 학번이나 이름을 확인해주세요.',
+        message: '일치하는 계정 정보를 찾을 수 없습니다. 아이디를 확인해주세요.',
       };
     }
 
-    const expectedPw = foundStudent.passwordHash || '1234';
-    if (pw === expectedPw || pw === '1234') {
-      setCurrentUserId(foundStudent.id);
-      setIsLoggedIn(true);
-      return {
-        success: true,
-        role: 'student',
-        message: `${foundStudent.name} 학생으로 로그인되었습니다.`,
-        user: foundStudent,
-      };
-    } else {
+    const expectedPw = targetUser.passwordHash || '1234';
+    if (pw !== expectedPw) {
       return {
         success: false,
         message: '비밀번호가 일치하지 않습니다.',
       };
     }
+
+    setCurrentUserId(targetUser.id);
+    setIsLoggedIn(true);
+
+    return {
+      success: true,
+      role: targetUser.role,
+      message: targetUser.role === 'teacher' ? '선생님 계정으로 접속했습니다.' : `${targetUser.name} 학생으로 로그인되었습니다.`,
+      user: targetUser,
+    };
   };
 
   const logout = () => {
@@ -662,9 +654,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // 🧹 신학기 학급 경제 데이터 전체 초기화 (Clean Slate)
-  const resetClassroomEconomy = async (defaultPoints = 1000): Promise<{ success: boolean; message: string }> => {
+  const resetClassroomEconomy = async (defaultPoints = 500): Promise<{ success: boolean; message: string }> => {
     try {
-      // 1. Reset all student balances to defaultPoints, teacher to 999999
+      // 1. Reset all student balances to defaultPoints (500), teacher to 999999
       const cleanUsers = users.map((u) => ({
         ...u,
         points: u.role === 'teacher' ? 999999 : defaultPoints,
@@ -675,17 +667,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
       setUsers(cleanUsers);
 
-      // 2. Reset stats to 10
+      // 2. Reset 5 stats to 1
       const cleanStats: Record<string, StudentStats> = {};
       cleanUsers.forEach((u) => {
         if (u.role === 'student') {
           cleanStats[u.id] = {
             userId: u.id,
-            diligence: 10,
-            frugality: 10,
-            contribution: 10,
-            wisdom: 10,
-            credit: 10,
+            diligence: 1,
+            frugality: 1,
+            contribution: 1,
+            wisdom: 1,
+            credit: 1,
           };
         }
       });
