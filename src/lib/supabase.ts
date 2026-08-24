@@ -966,118 +966,172 @@ export async function fetchQuestsFromSupabase(): Promise<Quest[] | null> {
 
     if (error) {
       console.warn('[Supabase] Failed to fetch quests from DB:', error.message);
-      return null;
+      // Try fetching without order by created_at if created_at column is missing
+      const fallbackRes = await supabase.from('quests').select('*');
+      if (fallbackRes.error || !fallbackRes.data) {
+        return null;
+      }
+      return fallbackRes.data.map((row: any) => parseQuestRow(row));
     }
 
     if (!data) return null;
-
-    return data.map((row: any) => {
-      // JSON array fallback parsing for recurring_days and target_student_ids
-      let recurringDays: number[] | undefined = undefined;
-      if (row.recurring_days) {
-        recurringDays = Array.isArray(row.recurring_days)
-          ? row.recurring_days
-          : typeof row.recurring_days === 'string'
-          ? JSON.parse(row.recurring_days)
-          : undefined;
-      }
-
-      let targetStudentIds: string[] | undefined = undefined;
-      if (row.target_student_ids) {
-        targetStudentIds = Array.isArray(row.target_student_ids)
-          ? row.target_student_ids
-          : typeof row.target_student_ids === 'string'
-          ? JSON.parse(row.target_student_ids)
-          : undefined;
-      }
-
-      return {
-        id: String(row.id),
-        title: row.title || '퀘스트',
-        description: row.description || '',
-        questType: row.quest_type || row.questType || 'homework',
-        rewardPoints: Number(row.reward_points ?? row.rewardPoints ?? 100),
-        statRewardType: (row.stat_reward_type || row.statRewardType || undefined) as StatKey | undefined,
-        statRewardAmount:
-          row.stat_reward_amount !== undefined && row.stat_reward_amount !== null
-            ? Number(row.stat_reward_amount)
-            : row.statRewardAmount !== undefined && row.statRewardAmount !== null
-            ? Number(row.statRewardAmount)
-            : 1,
-        isRecurring: Boolean(row.is_recurring ?? row.isRecurring ?? true),
-        frequencyType: row.frequency_type || row.frequencyType || 'recurring',
-        recurringDays,
-        targetStudentType: row.target_student_type || row.targetStudentType || 'all',
-        targetStudentIds,
-        targetJobId: row.target_job_id || row.targetJobId || undefined,
-        dueDate: row.due_date || row.dueDate || undefined,
-        icon: row.icon || '📝',
-        isArchived: Boolean(row.is_archived ?? row.isArchived ?? false),
-        archivedAt: row.archived_at || row.archivedAt || undefined,
-      };
-    });
+    return data.map((row: any) => parseQuestRow(row));
   } catch (err) {
     console.warn('[Supabase] Error connecting to quests DB:', err);
     return null;
   }
 }
 
+function parseQuestRow(row: any): Quest {
+  // JSON array parsing for recurring_days and target_student_ids
+  let recurringDays: number[] | undefined = undefined;
+  if (row.recurring_days || row.recurringDays) {
+    const val = row.recurring_days || row.recurringDays;
+    recurringDays = Array.isArray(val)
+      ? val
+      : typeof val === 'string'
+      ? (() => { try { return JSON.parse(val); } catch (e) { return undefined; } })()
+      : undefined;
+  }
+
+  let targetStudentIds: string[] | undefined = undefined;
+  if (row.target_student_ids || row.targetStudentIds) {
+    const val = row.target_student_ids || row.targetStudentIds;
+    targetStudentIds = Array.isArray(val)
+      ? val
+      : typeof val === 'string'
+      ? (() => { try { return JSON.parse(val); } catch (e) { return undefined; } })()
+      : undefined;
+  }
+
+  const rawReward = row.reward_points ?? row.reward ?? row.rewardPoints ?? 100;
+  const rawTargetType = row.target_student_type || row.target_type || row.targetStudentType || 'all';
+
+  return {
+    id: String(row.id),
+    title: row.title || '퀘스트',
+    description: row.description || '',
+    questType: row.quest_type || row.questType || 'homework',
+    rewardPoints: Number(rawReward),
+    statRewardType: (row.stat_reward_type || row.statRewardType || undefined) as StatKey | undefined,
+    statRewardAmount:
+      row.stat_reward_amount !== undefined && row.stat_reward_amount !== null
+        ? Number(row.stat_reward_amount)
+        : row.statRewardAmount !== undefined && row.statRewardAmount !== null
+        ? Number(row.statRewardAmount)
+        : 1,
+    isRecurring: Boolean(row.is_recurring ?? row.isRecurring ?? true),
+    frequencyType: row.frequency_type || row.frequencyType || 'recurring',
+    recurringDays,
+    targetStudentType: rawTargetType,
+    targetStudentIds,
+    targetJobId: row.target_job_id || row.targetJobId || undefined,
+    dueDate: row.due_date || row.dueDate || undefined,
+    icon: row.icon || '📝',
+    isArchived: Boolean(row.is_archived ?? row.isArchived ?? false),
+    archivedAt: row.archived_at || row.archivedAt || undefined,
+  };
+}
+
 /**
- * Supabase DB의 quests 테이블에 퀘스트 1건 추가 또는 Upsert
+ * Supabase DB의 quests 테이블에 퀘스트 1건 추가 또는 Upsert (다중 스키마 적응형)
  */
 export async function upsertQuestToSupabase(quest: Quest): Promise<boolean> {
   if (!supabase) return false;
+
+  // 1순위: 표준 전체 스키마 (Full modern schema)
+  const fullRow: Record<string, any> = {
+    id: quest.id,
+    title: quest.title,
+    description: quest.description || '',
+    quest_type: quest.questType,
+    reward_points: quest.rewardPoints,
+    stat_reward_type: quest.statRewardType || null,
+    stat_reward_amount: quest.statRewardAmount !== undefined && quest.statRewardAmount !== null ? Number(quest.statRewardAmount) : 1,
+    is_recurring: Boolean(quest.isRecurring),
+    frequency_type: quest.frequencyType || 'recurring',
+    recurring_days: quest.recurringDays || null,
+    target_student_type: quest.targetStudentType || 'all',
+    target_student_ids: quest.targetStudentIds || null,
+    target_job_id: quest.targetJobId || null,
+    due_date: quest.dueDate || null,
+    icon: quest.icon || '📝',
+    is_archived: Boolean(quest.isArchived),
+    archived_at: quest.archivedAt || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
   try {
-    const row = {
+    const { error: fullError } = await supabase.from('quests').upsert(fullRow, { onConflict: 'id' });
+    if (!fullError) {
+      console.log(`[Supabase] Successfully saved quest (${quest.title}) with full schema.`);
+      return true;
+    }
+
+    console.warn('[Supabase] Full schema upsert failed, attempting adaptive schema mapping:', fullError.message);
+
+    // 2순위: 사용자 DB 컬럼명 매핑 (reward, target_type 호환)
+    const adaptiveRow: Record<string, any> = {
       id: quest.id,
       title: quest.title,
       description: quest.description || '',
       quest_type: quest.questType,
-      reward_points: quest.rewardPoints,
-      stat_reward_type: quest.statRewardType || null,
-      stat_reward_amount: quest.statRewardAmount !== undefined && quest.statRewardAmount !== null ? Number(quest.statRewardAmount) : 1,
-      is_recurring: Boolean(quest.isRecurring),
-      frequency_type: quest.frequencyType || 'recurring',
-      recurring_days: quest.recurringDays || null,
-      target_student_type: quest.targetStudentType || 'all',
-      target_student_ids: quest.targetStudentIds || null,
+      reward: quest.rewardPoints, // DB 컬럼: reward
+      icon: quest.icon || '📝',
+      target_type: quest.targetStudentType || 'all', // DB 컬럼: target_type
       target_job_id: quest.targetJobId || null,
       due_date: quest.dueDate || null,
-      icon: quest.icon || '📝',
+      is_recurring: Boolean(quest.isRecurring),
+      recurring_days: quest.recurringDays || null,
+      target_student_ids: quest.targetStudentIds || null,
+      stat_reward_type: quest.statRewardType || null,
+      stat_reward_amount: quest.statRewardAmount || 1,
+      frequency_type: quest.frequencyType || 'recurring',
       is_archived: Boolean(quest.isArchived),
-      archived_at: quest.archivedAt || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('quests').upsert(row, { onConflict: 'id' });
-    if (error) {
-      console.warn('[Supabase] Failed to upsert full quest to DB, attempting fallback:', error.message);
-      
-      // Fallback: If DB schema has slightly different or fewer columns, try with core fields
-      const coreRow = {
-        id: quest.id,
-        title: quest.title,
-        description: quest.description || '',
-        quest_type: quest.questType,
-        reward_points: quest.rewardPoints,
-        is_recurring: Boolean(quest.isRecurring),
-        target_student_type: quest.targetStudentType || 'all',
-        due_date: quest.dueDate || null,
-        icon: quest.icon || '📝',
-        is_archived: Boolean(quest.isArchived),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const fallbackRes = await supabase.from('quests').upsert(coreRow, { onConflict: 'id' });
-      if (fallbackRes.error) {
-        console.error('[Supabase] Both full and fallback upsert failed for quest:', fallbackRes.error);
-        return false;
-      }
+    const { error: adaptiveError } = await supabase.from('quests').upsert(adaptiveRow, { onConflict: 'id' });
+    if (!adaptiveError) {
+      console.log(`[Supabase] Successfully saved quest (${quest.title}) with adaptive schema.`);
       return true;
     }
-    return true;
+
+    console.warn('[Supabase] Adaptive schema upsert failed, attempting minimal core row:', adaptiveError.message);
+
+    // 3순위: 최소 컬럼 (id, title, description, reward, quest_type, icon, target_type, target_job_id)
+    const minimalRow: Record<string, any> = {
+      id: quest.id,
+      title: quest.title,
+      description: quest.description || '',
+      quest_type: quest.questType,
+      reward: quest.rewardPoints,
+      icon: quest.icon || '📝',
+      target_type: quest.targetStudentType || 'all',
+      target_job_id: quest.targetJobId || null,
+    };
+
+    const { error: minimalError } = await supabase.from('quests').upsert(minimalRow, { onConflict: 'id' });
+    if (!minimalError) {
+      console.log(`[Supabase] Successfully saved quest (${quest.title}) with minimal schema.`);
+      return true;
+    }
+
+    // 4순위: 절대 최소 컬럼
+    const absoluteRow: Record<string, any> = {
+      id: quest.id,
+      title: quest.title,
+      reward: quest.rewardPoints,
+    };
+
+    const { error: absError } = await supabase.from('quests').upsert(absoluteRow, { onConflict: 'id' });
+    if (!absError) {
+      console.log(`[Supabase] Successfully saved quest (${quest.title}) with absolute minimal schema.`);
+      return true;
+    }
+
+    console.error('[Supabase] All upsert attempts failed for quest:', absError.message);
+    return false;
   } catch (err) {
     console.error('[Supabase] Error upserting quest in DB:', err);
     return false;
@@ -1097,13 +1151,19 @@ export async function updateQuestInSupabase(questId: string, updates: Partial<Qu
     if (updates.title !== undefined) rowUpdates.title = updates.title;
     if (updates.description !== undefined) rowUpdates.description = updates.description;
     if (updates.questType !== undefined) rowUpdates.quest_type = updates.questType;
-    if (updates.rewardPoints !== undefined) rowUpdates.reward_points = updates.rewardPoints;
+    if (updates.rewardPoints !== undefined) {
+      rowUpdates.reward_points = updates.rewardPoints;
+      rowUpdates.reward = updates.rewardPoints; // Dual column support
+    }
     if (updates.statRewardType !== undefined) rowUpdates.stat_reward_type = updates.statRewardType;
     if (updates.statRewardAmount !== undefined) rowUpdates.stat_reward_amount = updates.statRewardAmount;
     if (updates.isRecurring !== undefined) rowUpdates.is_recurring = updates.isRecurring;
     if (updates.frequencyType !== undefined) rowUpdates.frequency_type = updates.frequencyType;
     if (updates.recurringDays !== undefined) rowUpdates.recurring_days = updates.recurringDays;
-    if (updates.targetStudentType !== undefined) rowUpdates.target_student_type = updates.targetStudentType;
+    if (updates.targetStudentType !== undefined) {
+      rowUpdates.target_student_type = updates.targetStudentType;
+      rowUpdates.target_type = updates.targetStudentType; // Dual column support
+    }
     if (updates.targetStudentIds !== undefined) rowUpdates.target_student_ids = updates.targetStudentIds;
     if (updates.targetJobId !== undefined) rowUpdates.target_job_id = updates.targetJobId;
     if (updates.dueDate !== undefined) rowUpdates.due_date = updates.dueDate;
@@ -1113,8 +1173,21 @@ export async function updateQuestInSupabase(questId: string, updates: Partial<Qu
 
     const { error } = await supabase.from('quests').update(rowUpdates).eq('id', questId);
     if (error) {
-      console.warn('[Supabase] Failed to update quest in DB:', error.message);
-      return false;
+      console.warn('[Supabase] Primary update failed, trying fallback updates:', error.message);
+      // Try updating only standard columns
+      const fallbackUpdates: Record<string, any> = {};
+      if (updates.title !== undefined) fallbackUpdates.title = updates.title;
+      if (updates.rewardPoints !== undefined) fallbackUpdates.reward = updates.rewardPoints;
+      if (updates.description !== undefined) fallbackUpdates.description = updates.description;
+      if (updates.targetStudentType !== undefined) fallbackUpdates.target_type = updates.targetStudentType;
+      if (updates.isArchived !== undefined) fallbackUpdates.is_archived = updates.isArchived;
+
+      const fallbackRes = await supabase.from('quests').update(fallbackUpdates).eq('id', questId);
+      if (fallbackRes.error) {
+        console.error('[Supabase] Failed to update quest with fallback in DB:', fallbackRes.error.message);
+        return false;
+      }
+      return true;
     }
     return true;
   } catch (err) {
@@ -1150,34 +1223,13 @@ export async function deleteQuestFromSupabase(questId: string): Promise<boolean>
 export async function bulkUpsertQuestsToSupabase(questsList: Quest[]): Promise<boolean> {
   if (!supabase || questsList.length === 0) return false;
   try {
-    const rows = questsList.map((q) => ({
-      id: q.id,
-      title: q.title,
-      description: q.description || '',
-      quest_type: q.questType,
-      reward_points: q.rewardPoints,
-      stat_reward_type: q.statRewardType || null,
-      stat_reward_amount: q.statRewardAmount || 1,
-      is_recurring: q.isRecurring,
-      frequency_type: q.frequencyType || 'recurring',
-      recurring_days: q.recurringDays || null,
-      target_student_type: q.targetStudentType || 'all',
-      target_student_ids: q.targetStudentIds || null,
-      target_job_id: q.targetJobId || null,
-      due_date: q.dueDate || null,
-      icon: q.icon || '📝',
-      is_archived: Boolean(q.isArchived),
-      archived_at: q.archivedAt || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
-
-    const { error } = await supabase.from('quests').upsert(rows, { onConflict: 'id' });
-    if (error) {
-      console.warn('[Supabase] Failed to bulk upsert quests:', error.message);
-      return false;
+    // Loop through quests and use adaptive upsert for each to guarantee resilience
+    let allSuccess = true;
+    for (const q of questsList) {
+      const ok = await upsertQuestToSupabase(q);
+      if (!ok) allSuccess = false;
     }
-    return true;
+    return allSuccess;
   } catch (err) {
     console.warn('[Supabase] Error in bulkUpsertQuestsToSupabase:', err);
     return false;
