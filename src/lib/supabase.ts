@@ -1036,7 +1036,7 @@ export async function upsertQuestToSupabase(quest: Quest): Promise<boolean> {
       reward_points: quest.rewardPoints,
       stat_reward_type: quest.statRewardType || null,
       stat_reward_amount: quest.statRewardAmount !== undefined && quest.statRewardAmount !== null ? Number(quest.statRewardAmount) : 1,
-      is_recurring: quest.isRecurring,
+      is_recurring: Boolean(quest.isRecurring),
       frequency_type: quest.frequencyType || 'recurring',
       recurring_days: quest.recurringDays || null,
       target_student_type: quest.targetStudentType || 'all',
@@ -1046,17 +1046,40 @@ export async function upsertQuestToSupabase(quest: Quest): Promise<boolean> {
       icon: quest.icon || '📝',
       is_archived: Boolean(quest.isArchived),
       archived_at: quest.archivedAt || null,
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase.from('quests').upsert(row, { onConflict: 'id' });
     if (error) {
-      console.warn('[Supabase] Failed to upsert quest to DB:', error.message);
-      return false;
+      console.warn('[Supabase] Failed to upsert full quest to DB, attempting fallback:', error.message);
+      
+      // Fallback: If DB schema has slightly different or fewer columns, try with core fields
+      const coreRow = {
+        id: quest.id,
+        title: quest.title,
+        description: quest.description || '',
+        quest_type: quest.questType,
+        reward_points: quest.rewardPoints,
+        is_recurring: Boolean(quest.isRecurring),
+        target_student_type: quest.targetStudentType || 'all',
+        due_date: quest.dueDate || null,
+        icon: quest.icon || '📝',
+        is_archived: Boolean(quest.isArchived),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const fallbackRes = await supabase.from('quests').upsert(coreRow, { onConflict: 'id' });
+      if (fallbackRes.error) {
+        console.error('[Supabase] Both full and fallback upsert failed for quest:', fallbackRes.error);
+        return false;
+      }
+      return true;
     }
     return true;
   } catch (err) {
-    console.warn('[Supabase] Error upserting quest in DB:', err);
+    console.error('[Supabase] Error upserting quest in DB:', err);
     return false;
   }
 }

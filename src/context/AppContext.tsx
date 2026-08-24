@@ -507,10 +507,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setAuctionBids(cloudAuctionBids);
         }
 
-        // 📝 퀘스트 목록 동기화 (DB가 비어있으면 예시 시딩 없이 그대로 빈 배열 유지)
+        // 📝 퀘스트 목록 동기화
         if (cloudQuests !== null) {
-          console.log(`[Supabase] Successfully loaded ${cloudQuests.length} quests from DB.`);
-          setQuests(cloudQuests);
+          if (cloudQuests.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudQuests.length} quests from DB.`);
+            setQuests(cloudQuests);
+          } else {
+            // DB 테이블이 비어있으면 로컬에 있는 퀘스트를 DB에 업로드하여 영구 보존
+            const localSaved = localStorage.getItem(`${STORAGE_KEY}_quests`);
+            let existingLocalQuests: Quest[] = [];
+            if (localSaved) {
+              try {
+                existingLocalQuests = JSON.parse(localSaved);
+              } catch (e) {}
+            }
+            if (existingLocalQuests.length > 0) {
+              console.log(`[Supabase] DB Quests table is empty. Syncing ${existingLocalQuests.length} local quests to Supabase DB...`);
+              bulkUpsertQuestsToSupabase(existingLocalQuests).catch((e) =>
+                console.warn('[Supabase] Initial local quests sync failed:', e)
+              );
+              setQuests(existingLocalQuests);
+            }
+          }
         }
 
         // 📝 퀘스트 제출/수행 로그 동기화
