@@ -78,6 +78,12 @@ import {
   upsertQuestLogToSupabase,
   deleteQuestLogFromSupabase,
   bulkUpsertQuestLogsToSupabase,
+  fetchTaxSettingsFromSupabase,
+  upsertTaxSettingToSupabase,
+  updateTaxSettingInSupabase,
+  deleteTaxSettingFromSupabase,
+  bulkUpsertTaxSettingsToSupabase,
+  upsertStudentStatsToSupabase,
   isSupabaseConfigured,
   supabase,
 } from '../lib/supabase';
@@ -139,13 +145,16 @@ interface AppContextType {
   approveQuestLog: (logId: string, teacherId: string) => void;
   rejectQuestLog: (logId: string, teacherId: string, reason: string) => void;
   createQuest: (questData: Omit<Quest, 'id'>) => void;
+  updateQuest: (questId: string, updates: Partial<Quest>) => void;
   deleteQuest: (questId: string, permanent?: boolean) => void;
   archiveQuest: (questId: string) => void;
   restoreQuest: (questId: string) => void;
 
   // Salary & Economy actions
   executeWeeklySalarySettlement: () => { totalPaid: number; totalTax: number; count: number };
+  createTaxSetting: (taxData: Omit<TaxSetting, 'id'>) => void;
   updateTaxSetting: (taxId: string, updates: Partial<TaxSetting>) => void;
+  deleteTaxSetting: (taxId: string) => void;
   adjustStudentPoints: (userId: string, amount: number, reason: string) => void;
 
   // Real Estate (Seat) actions
@@ -402,6 +411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           cloudAuctionBids,
           cloudQuests,
           cloudQuestLogs,
+          cloudTaxSettings,
         ] = await Promise.all([
           fetchProfilesFromSupabase(),
           fetchStatsFromSupabase(),
@@ -414,6 +424,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchAuctionBidsFromSupabase(),
           fetchQuestsFromSupabase(),
           fetchQuestLogsFromSupabase(),
+          fetchTaxSettingsFromSupabase(),
         ]);
 
         if (!isMounted) return;
@@ -487,16 +498,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (cloudAuctions !== null) {
-          if (cloudAuctions.length > 0) {
-            console.log(`[Supabase] Successfully loaded ${cloudAuctions.length} auctions from DB.`);
-            setAuctions(cloudAuctions);
-          } else {
-            console.log(`[Supabase] Auctions table is empty. Seeding initial auctions to Supabase DB...`);
-            bulkUpsertAuctionsToSupabase(INITIAL_AUCTION_ITEMS).catch((e) =>
-              console.warn('[Supabase] Initial auctions seeding failed:', e)
-            );
-            setAuctions(INITIAL_AUCTION_ITEMS);
-          }
+          console.log(`[Supabase] Successfully loaded ${cloudAuctions.length} auctions from DB.`);
+          setAuctions(cloudAuctions);
         }
 
         if (cloudAuctionBids !== null) {
@@ -504,31 +507,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setAuctionBids(cloudAuctionBids);
         }
 
-        // 📝 퀘스트 목록 동기화
+        // 📝 퀘스트 목록 동기화 (DB가 비어있으면 예시 시딩 없이 그대로 빈 배열 유지)
         if (cloudQuests !== null) {
-          if (cloudQuests.length > 0) {
-            console.log(`[Supabase] Successfully loaded ${cloudQuests.length} quests from DB.`);
-            setQuests(cloudQuests);
-          } else {
-            console.log(`[Supabase] Quests table is empty. Seeding initial quests to Supabase DB...`);
-            bulkUpsertQuestsToSupabase(INITIAL_QUESTS).catch((e) =>
-              console.warn('[Supabase] Initial quests seeding failed:', e)
-            );
-            setQuests(INITIAL_QUESTS);
-          }
+          console.log(`[Supabase] Successfully loaded ${cloudQuests.length} quests from DB.`);
+          setQuests(cloudQuests);
         }
 
         // 📝 퀘스트 제출/수행 로그 동기화
         if (cloudQuestLogs !== null) {
-          if (cloudQuestLogs.length > 0) {
-            console.log(`[Supabase] Successfully loaded ${cloudQuestLogs.length} quest logs from DB.`);
-            setQuestLogs(cloudQuestLogs);
+          console.log(`[Supabase] Successfully loaded ${cloudQuestLogs.length} quest logs from DB.`);
+          setQuestLogs(cloudQuestLogs);
+        }
+
+        // 💰 세금 정책 동기화
+        if (cloudTaxSettings !== null) {
+          if (cloudTaxSettings.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudTaxSettings.length} tax settings from DB.`);
+            setTaxSettings(cloudTaxSettings);
           } else {
-            console.log(`[Supabase] Quest logs table is empty. Seeding initial quest logs to Supabase DB...`);
-            bulkUpsertQuestLogsToSupabase(INITIAL_QUEST_LOGS).catch((e) =>
-              console.warn('[Supabase] Initial quest logs seeding failed:', e)
+            console.log(`[Supabase] Tax settings table is empty. Seeding initial tax policies to Supabase DB...`);
+            bulkUpsertTaxSettingsToSupabase(INITIAL_TAX_SETTINGS).catch((e) =>
+              console.warn('[Supabase] Initial tax settings seeding failed:', e)
             );
-            setQuestLogs(INITIAL_QUEST_LOGS);
+            setTaxSettings(INITIAL_TAX_SETTINGS);
           }
         }
       } catch (e) {
@@ -542,7 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let realtimeChannel: any = null;
     if (supabase) {
       realtimeChannel = supabase
-        .channel('public:quests_realtime')
+        .channel('public:classroom_realtime')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'quests' },
@@ -560,6 +561,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const freshLogs = await fetchQuestLogsFromSupabase();
             if (freshLogs && isMounted) {
               setQuestLogs(freshLogs);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tax_settings' },
+          async () => {
+            const freshTaxes = await fetchTaxSettingsFromSupabase();
+            if (freshTaxes !== null && isMounted) {
+              setTaxSettings(freshTaxes);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'auctions' },
+          async () => {
+            const freshAuctions = await fetchAuctionsFromSupabase();
+            if (freshAuctions !== null && isMounted) {
+              setAuctions(freshAuctions);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'auction_bids' },
+          async () => {
+            const freshBids = await fetchAuctionBidsFromSupabase();
+            if (freshBids !== null && isMounted) {
+              setAuctionBids(freshBids);
             }
           }
         )
@@ -1166,7 +1197,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const quest = quests.find((q) => q.id === log.questId);
     if (quest) {
       let statType: StatKey = quest.statRewardType || 'diligence';
-      let statAmount = quest.statRewardAmount ?? 1;
+      let statAmount =
+        typeof quest.statRewardAmount === 'number' && quest.statRewardAmount > 0
+          ? quest.statRewardAmount
+          : 1;
 
       if (!quest.statRewardType) {
         if (quest.questType === 'homework') {
@@ -1181,9 +1215,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      const currentVal = stats[log.userId]?.[statType] ?? 10;
-      updateStats(log.userId, {
-        [statType]: Math.min(100, currentVal + statAmount),
+      setStats((prev) => {
+        const current = prev[log.userId] || {
+          userId: log.userId,
+          diligence: 10,
+          frugality: 10,
+          contribution: 10,
+          wisdom: 10,
+          credit: 10,
+        };
+
+        const currentVal = current[statType] ?? 10;
+        const newVal = Math.min(100, Math.max(0, currentVal + statAmount));
+        const updated = { ...current, [statType]: newVal };
+
+        if (isSupabaseConfigured) {
+          upsertStudentStatsToSupabase(updated).catch((err) =>
+            console.warn('[Supabase] Failed to update stats in DB:', err)
+          );
+        }
+
+        return {
+          ...prev,
+          [log.userId]: updated,
+        };
       });
     }
 
@@ -1230,13 +1285,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createQuest = (questData: Omit<Quest, 'id'>) => {
     const newQuest: Quest = {
       ...questData,
-      id: `quest-${Date.now()}`,
+      id: `quest-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     };
     setQuests((prev) => [...prev, newQuest]);
 
     if (isSupabaseConfigured) {
       upsertQuestToSupabase(newQuest).catch((err) =>
         console.warn('[Supabase] Failed to insert new quest to DB:', err)
+      );
+    }
+  };
+
+  const updateQuest = (questId: string, updates: Partial<Quest>) => {
+    setQuests((prev) =>
+      prev.map((q) => (q.id === questId ? { ...q, ...updates } : q))
+    );
+    if (isSupabaseConfigured) {
+      updateQuestInSupabase(questId, updates).catch((err) =>
+        console.warn('[Supabase] Failed to update quest in DB:', err)
       );
     }
   };
@@ -1386,8 +1452,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { totalPaid: totalGrossPaid, totalTax: totalTaxCollected, count };
   };
 
+  const createTaxSetting = (taxData: Omit<TaxSetting, 'id'>) => {
+    const newTax: TaxSetting = {
+      ...taxData,
+      id: `tax-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    };
+    setTaxSettings((prev) => [...prev, newTax]);
+
+    if (isSupabaseConfigured) {
+      upsertTaxSettingToSupabase(newTax).catch((err) =>
+        console.warn('[Supabase] Failed to insert new tax setting to DB:', err)
+      );
+    }
+  };
+
   const updateTaxSetting = (taxId: string, updates: Partial<TaxSetting>) => {
     setTaxSettings((prev) => prev.map((t) => (t.id === taxId ? { ...t, ...updates } : t)));
+    if (isSupabaseConfigured) {
+      updateTaxSettingInSupabase(taxId, updates).catch((err) =>
+        console.warn('[Supabase] Failed to update tax setting in DB:', err)
+      );
+    }
+  };
+
+  const deleteTaxSetting = (taxId: string) => {
+    setTaxSettings((prev) => prev.filter((t) => t.id !== taxId));
+    if (isSupabaseConfigured) {
+      deleteTaxSettingFromSupabase(taxId).catch((err) =>
+        console.warn('[Supabase] Failed to delete tax setting from DB:', err)
+      );
+    }
   };
 
   const adjustStudentPoints = (userId: string, amount: number, reason: string) => {
@@ -2101,9 +2195,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
+      const updated = { ...current, ...clamped };
+
+      if (isSupabaseConfigured) {
+        upsertStudentStatsToSupabase(updated).catch((err) =>
+          console.warn('[Supabase] Failed to update stats in DB:', err)
+        );
+      }
+
       return {
         ...prev,
-        [userId]: { ...current, ...clamped },
+        [userId]: updated,
       };
     });
   };
@@ -2231,11 +2333,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveQuestLog,
         rejectQuestLog,
         createQuest,
+        updateQuest,
         deleteQuest,
         archiveQuest,
         restoreQuest,
         executeWeeklySalarySettlement,
+        createTaxSetting,
         updateTaxSetting,
+        deleteTaxSetting,
         adjustStudentPoints,
         buySeatFromTeacher,
         buySeatFromNation,

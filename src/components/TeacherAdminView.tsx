@@ -35,7 +35,7 @@ import {
   Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Job, Quest, AuctionItem, ShopItem, QuestFrequencyType, QuestTargetType, StatKey } from '../types';
+import { Job, Quest, AuctionItem, ShopItem, TaxSetting, QuestFrequencyType, QuestTargetType, StatKey } from '../types';
 import { TeacherSeatManagement } from './TeacherSeatManagement';
 import { JobEmojiSelector } from './JobEmojiSelector';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -74,7 +74,9 @@ export const TeacherAdminView: React.FC = () => {
     deleteQuest,
     archiveQuest,
     restoreQuest,
+    createTaxSetting,
     updateTaxSetting,
+    deleteTaxSetting,
     adjustStudentPoints,
     createShopItem,
     updateShopItem,
@@ -92,8 +94,23 @@ export const TeacherAdminView: React.FC = () => {
   // Reset classroom modal state
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [showSqlGuideModal, setShowSqlGuideModal] = useState(false);
-  const [sqlModalTab, setSqlModalTab] = useState<'all' | 'quests' | 'shop_auction' | 'seats' | 'jobs' | 'transactions'>('quests');
+
+  // Tax Policy Management Modal States
+  const [showAddTaxModal, setShowAddTaxModal] = useState(false);
+  const [newTaxName, setNewTaxName] = useState('');
+  const [newTaxType, setNewTaxType] = useState<'percent' | 'fixed'>('percent');
+  const [newTaxValue, setNewTaxValue] = useState(10);
+  const [newTaxDesc, setNewTaxDesc] = useState('');
+  const [newTaxIsActive, setNewTaxIsActive] = useState(true);
+
+  const [editingTax, setEditingTax] = useState<TaxSetting | null>(null);
+  const [editTaxName, setEditTaxName] = useState('');
+  const [editTaxType, setEditTaxType] = useState<'percent' | 'fixed'>('percent');
+  const [editTaxValue, setEditTaxValue] = useState(10);
+  const [editTaxDesc, setEditTaxDesc] = useState('');
+  const [editTaxIsActive, setEditTaxIsActive] = useState(true);
+
+  const [deletingTaxTarget, setDeletingTaxTarget] = useState<TaxSetting | null>(null);
 
   // Job Application rejection modal
   const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
@@ -222,6 +239,61 @@ export const TeacherAdminView: React.FC = () => {
     showToast(
       `총 ${res.count}명의 학생에게 주급(총 ${res.totalPaid.toLocaleString()}P) 지급 및 세금(${res.totalTax.toLocaleString()}P) 공제가 완료되었습니다!`
     );
+  };
+
+  // Tax Policy Handlers
+  const handleCreateTaxSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaxName.trim()) return;
+
+    createTaxSetting({
+      name: newTaxName.trim(),
+      taxType: newTaxType,
+      value: Number(newTaxValue),
+      description: newTaxDesc.trim() || '학급 세금 및 공제 정책',
+      isActive: newTaxIsActive,
+    });
+
+    showToast(`'${newTaxName}' 세금 정책이 등록되었습니다!`);
+    setShowAddTaxModal(false);
+    setNewTaxName('');
+    setNewTaxType('percent');
+    setNewTaxValue(10);
+    setNewTaxDesc('');
+    setNewTaxIsActive(true);
+  };
+
+  const handleOpenEditTax = (tax: TaxSetting) => {
+    setEditingTax(tax);
+    setEditTaxName(tax.name);
+    setEditTaxType(tax.taxType);
+    setEditTaxValue(tax.value);
+    setEditTaxDesc(tax.description);
+    setEditTaxIsActive(tax.isActive);
+  };
+
+  const handleUpdateTaxSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTax || !editTaxName.trim()) return;
+
+    updateTaxSetting(editingTax.id, {
+      name: editTaxName.trim(),
+      taxType: editTaxType,
+      value: Number(editTaxValue),
+      description: editTaxDesc.trim(),
+      isActive: editTaxIsActive,
+    });
+
+    showToast(`'${editTaxName}' 세금 정책이 성공적으로 수정되었습니다!`);
+    setEditingTax(null);
+  };
+
+  const handleExecuteDeleteTax = () => {
+    if (!deletingTaxTarget) return;
+    const name = deletingTaxTarget.name;
+    deleteTaxSetting(deletingTaxTarget.id);
+    showToast(`'${name}' 세금 정책이 삭제되었습니다.`);
+    setDeletingTaxTarget(null);
   };
 
   const handleCreateJob = (e: React.FormEvent) => {
@@ -1788,10 +1860,14 @@ export const TeacherAdminView: React.FC = () => {
                                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg font-medium text-[11px] bg-slate-100 text-slate-600">
                                   <Award className="w-3 h-3 text-slate-400" />
                                   {quest.statRewardType === 'wisdom'
-                                    ? '지혜+2'
+                                    ? `지혜 +${quest.statRewardAmount ?? 1}`
                                     : quest.statRewardType === 'contribution'
-                                    ? '기여+2'
-                                    : '성실+2'}
+                                    ? `기여 +${quest.statRewardAmount ?? 1}`
+                                    : quest.statRewardType === 'frugality'
+                                    ? `절약 +${quest.statRewardAmount ?? 1}`
+                                    : quest.statRewardType === 'credit'
+                                    ? `신용 +${quest.statRewardAmount ?? 1}`
+                                    : `성실 +${quest.statRewardAmount ?? 1}`}
                                 </span>
                               )}
                             </div>
@@ -2687,42 +2763,182 @@ export const TeacherAdminView: React.FC = () => {
 
       {/* SUB TAB 4: TAXES */}
       {activeAdminSubTab === 'taxes' && (
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-base text-slate-850">학급 세금 및 공제 정책 설정</h3>
-            <p className="text-xs text-slate-500">
-              주급 정산 시 자동 차감될 세금 항목과 비율/정액 금액을 유연하게 조정할 수 있습니다.
-            </p>
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-sm">
+                  ⚖️
+                </div>
+                <h3 className="font-extrabold text-base sm:text-lg text-slate-850">
+                  학급 세금 및 공제 정책 설정
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                주급 정산 시 자동 공제될 학급 세금 정책을 실시간으로 추가, 수정, 삭제 및 활성화/비활성화할 수 있습니다.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setShowAddTaxModal(true)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition"
+              >
+                <Plus className="w-4 h-4" /> 새 세금 정책 추가
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {taxSettings.map((tax) => (
-              <div
-                key={tax.id}
-                className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-sm text-slate-850">{tax.name}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-mono font-bold">
-                    {tax.value}
-                    {tax.taxType === 'percent' ? '%' : 'P'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">{tax.description}</p>
-                <div className="pt-2 border-t border-slate-200 flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={tax.value}
-                    onChange={(e) => updateTaxSetting(tax.id, { value: Number(e.target.value) })}
-                    className="w-24 px-2 py-1 rounded-lg bg-white border border-slate-200 text-xs font-mono text-slate-800"
-                  />
-                  <span className="text-xs text-slate-500">
-                    {tax.taxType === 'percent' ? '% 로 수정' : 'P 로 수정'}
-                  </span>
-                </div>
+          {/* Quick Simulation & Stats Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-rose-50/40 border border-slate-200">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-slate-500">📊 등록된 세금 정책</span>
+              <div className="text-xl font-black font-mono text-slate-850">
+                {taxSettings.length}개 <span className="text-xs font-normal text-slate-500">({taxSettings.filter(t => t.isActive).length}개 활성)</span>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
+              <span className="text-[11px] font-bold text-slate-500">💡 기준 주급 (500P) 시뮬레이션</span>
+              <div className="text-xl font-black font-mono text-rose-600">
+                -{taxSettings.filter(t => t.isActive).reduce((sum, t) => {
+                  if (t.id === 'tax-seat') return sum;
+                  if (t.taxType === 'percent') return sum + Math.round(500 * (t.value / 100));
+                  return sum + t.value;
+                }, 0).toLocaleString()} P
+              </div>
+              <span className="text-[10px] text-slate-400 block">학급세 공제액 (자리세 별도)</span>
+            </div>
+
+            <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
+              <span className="text-[11px] font-bold text-slate-500">⚡ 실시간 동기화 상태</span>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Supabase 양방향 실시간 연동 중</span>
+              </div>
+              <span className="text-[10px] text-slate-400 block">수정 즉시 학생 캐릭터에 반영</span>
+            </div>
           </div>
+
+          {/* Tax Cards Grid */}
+          {taxSettings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {taxSettings.map((tax) => {
+                const sampleDeduction = tax.taxType === 'percent' ? Math.round(500 * (tax.value / 100)) : tax.value;
+
+                return (
+                  <div
+                    key={tax.id}
+                    className={`p-5 rounded-3xl border transition flex flex-col justify-between space-y-4 ${
+                      tax.isActive
+                        ? 'bg-white border-slate-200 shadow-sm hover:border-rose-300'
+                        : 'bg-slate-50/70 border-slate-200/60 opacity-60'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      {/* Card Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <h4 className="font-extrabold text-sm text-slate-850 leading-snug">
+                            {tax.name}
+                          </h4>
+                          <span
+                            className={`inline-block text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
+                              tax.taxType === 'percent'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                : 'bg-blue-100 text-blue-900 border border-blue-200'
+                            }`}
+                          >
+                            {tax.value}
+                            {tax.taxType === 'percent' ? '% 소득세율' : 'P 고정 정액'}
+                          </span>
+                        </div>
+
+                        {/* Active Toggle Switch */}
+                        <button
+                          onClick={() => updateTaxSetting(tax.id, { isActive: !tax.isActive })}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                            tax.isActive
+                              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                              : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                          }`}
+                          title={tax.isActive ? '클릭 시 비활성화' : '클릭 시 활성화'}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${tax.isActive ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
+                          <span>{tax.isActive ? '적용 중' : '비활성'}</span>
+                        </button>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-xs text-slate-500 leading-relaxed min-h-[32px]">
+                        {tax.description}
+                      </p>
+
+                      {/* Quick Inline Value Input & Calculation */}
+                      <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500 font-semibold">세율/금액 빠른 변경</span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {tax.taxType === 'percent' ? '500P 기준 ' + sampleDeduction + 'P 공제' : '주급 당 ' + tax.value + 'P'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            max={tax.taxType === 'percent' ? 100 : 10000}
+                            value={tax.value}
+                            onChange={(e) => updateTaxSetting(tax.id, { value: Number(e.target.value) })}
+                            className="flex-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-400"
+                          />
+                          <span className="text-xs font-bold text-slate-600 shrink-0">
+                            {tax.taxType === 'percent' ? '%' : 'P'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => handleOpenEditTax(tax)}
+                        className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>상세 수정</span>
+                      </button>
+                      <button
+                        onClick={() => setDeletingTaxTarget(tax)}
+                        className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                        title="세금 정책 삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-slate-50/70 rounded-3xl border border-dashed border-slate-200 p-8 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center text-2xl mx-auto">
+                🏛️
+              </div>
+              <div className="font-extrabold text-slate-800 text-base">현재 등록된 세금 정책이 없습니다.</div>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                새로운 세금 정책을 등록하여 주급 정산 시 공제될 학급 기금 및 세금을 자유롭게 운영하세요.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowAddTaxModal(true)}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition"
+                >
+                  <Plus className="w-4 h-4" /> 새 세금 정책 등록하기
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2784,14 +3000,6 @@ export const TeacherAdminView: React.FC = () => {
               <div>
                 <h3 className="font-bold text-base text-slate-850">학생 화폐 잔액 & 수기 상벌점 조정</h3>
                 <p className="text-xs text-slate-500">특별 기여 포인트를 주거나 벌점을 부과할 수 있습니다.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowSqlGuideModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>⚡ Supabase SQL 가이드</span>
-                </button>
               </div>
             </div>
 
@@ -2970,911 +3178,6 @@ export const TeacherAdminView: React.FC = () => {
             </div>
           )}
 
-          {/* Supabase SQL Helper Modal */}
-          {showSqlGuideModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-              <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg">
-                      ⚡
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-base text-slate-850">Supabase DB 테이블 스키마 SQL 가이드</h3>
-                      <p className="text-xs text-slate-500">수파베이스의 SQL Editor에 붙여넣어 실행하면 데이터가 실시간 영구 보존됩니다.</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowSqlGuideModal(false)}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* Safety Notice Banner */}
-                <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200/80 text-xs text-sky-900 space-y-1.5">
-                  <div className="font-bold flex items-center gap-1.5 text-sky-800">
-                    <span>💡</span>
-                    <span>이미 앞서 몇 개 테이블을 생성하셨어도 안심하세요!</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-sky-700">
-                    모든 SQL에 <code>CREATE TABLE IF NOT EXISTS</code> 및 <code>DROP POLICY IF EXISTS</code> 안전 처리가 되어 있어, 
-                    <strong>전체 스크립트를 다시 실행하셔도 기존 데이터가 삭제되지 않고 안전하게 통과/추가</strong>됩니다.
-                    또는 아래 탭에서 <strong>[상점 & 특권 경매]</strong>만 선택하여 이번에 추가된 4개 테이블만 깔끔하게 복사해 실행하셔도 됩니다!
-                  </p>
-                </div>
-
-                {/* Category Tabs */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-100 text-xs font-bold">
-                  <button
-                    onClick={() => setSqlModalTab('quests')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'quests'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>📝 퀘스트 & 할일 (quests, logs 2개)</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${sqlModalTab === 'quests' ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-700'}`}>신규</span>
-                  </button>
-                  <button
-                    onClick={() => setSqlModalTab('shop_auction')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'shop_auction'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>🏪 상점 & 특권 경매 (4개)</span>
-                  </button>
-                  <button
-                    onClick={() => setSqlModalTab('seats')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'seats'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>🪑 자리 배치도 & 부동산 (seats)</span>
-                  </button>
-                  <button
-                    onClick={() => setSqlModalTab('jobs')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'jobs'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>💼 1인 1역 직업 (jobs)</span>
-                  </button>
-                  <button
-                    onClick={() => setSqlModalTab('transactions')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'transactions'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>💳 전자 통장 (point_transactions)</span>
-                  </button>
-                  <button
-                    onClick={() => setSqlModalTab('all')}
-                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                      sqlModalTab === 'all'
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>📦 전체 테이블 통합 (총 9개)</span>
-                  </button>
-                </div>
-
-                {/* SQL Code Preview Area */}
-                <div className="flex-1 overflow-y-auto space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-                    <span>
-                      {sqlModalTab === 'quests' && '📝 퀘스트 목록 및 학생 제출/심사 로그 테이블 (2개)'}
-                      {sqlModalTab === 'shop_auction' && '🏪 상점 상품, 주문 내역, 특권 경매, 입찰 기록 테이블 (4개)'}
-                      {sqlModalTab === 'seats' && '🪑 교실 자리 배치도 및 부동산 테이블 (1개)'}
-                      {sqlModalTab === 'jobs' && '💼 1인 1역 직업 목록 테이블 (1개)'}
-                      {sqlModalTab === 'transactions' && '💳 전자 통장 포인트 거래 기록 테이블 (1개)'}
-                      {sqlModalTab === 'all' && '📦 학급 화폐 및 퀘스트/상점/경매 시스템 전체 테이블 통합 스크립트 (총 9개 테이블)'}
-                    </span>
-                    <span className="text-[11px] text-slate-400">클릭 후 복사하여 Supabase SQL Editor에 실행</span>
-                  </div>
-
-                  <pre className="p-4 rounded-2xl bg-slate-900 text-emerald-400 text-[11px] font-mono overflow-x-auto leading-relaxed select-all border border-slate-800 shadow-inner">
-{sqlModalTab === 'quests' ? `-- ==========================================================
--- 📝 [신규] 퀘스트 & 할일 관리 (quests, quest_logs) 테이블 생성 SQL
--- ==========================================================
-
--- 1. 학급 퀘스트 목록 (quests) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quests (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    reward NUMERIC NOT NULL DEFAULT 100,
-    quest_type TEXT NOT NULL DEFAULT 'homework',
-    icon TEXT NOT NULL DEFAULT '📝',
-    target_type TEXT NOT NULL DEFAULT 'all',
-    target_job_id TEXT,
-    target_student_ids TEXT[],
-    frequency_type TEXT NOT NULL DEFAULT 'daily',
-    due_date TEXT,
-    recurring_days NUMERIC[],
-    stat_reward_type TEXT DEFAULT 'diligence',
-    stat_reward_amount NUMERIC DEFAULT 1,
-    is_archived BOOLEAN NOT NULL DEFAULT false,
-    archived_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
-        CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quest_logs (
-    id TEXT PRIMARY KEY,
-    quest_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    target_date TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    submitted_at TIMESTAMPTZ DEFAULT now(),
-    student_memo TEXT,
-    reviewed_at TIMESTAMPTZ,
-    reviewed_by TEXT,
-    reject_reason TEXT,
-    is_paid BOOLEAN NOT NULL DEFAULT false
-);
-
-CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
-
-ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
-        CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;` : sqlModalTab === 'shop_auction' ? `-- ==========================================================
--- [신규] 상점 상품 & 주문, 특권 경매 & 입찰 테이블 4종 생성 SQL
--- ==========================================================
-
--- 1. 학급 상점 상품 (shop_items) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_items (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    price NUMERIC NOT NULL DEFAULT 100,
-    stock NUMERIC NOT NULL DEFAULT 10,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    icon TEXT NOT NULL DEFAULT '🎟️',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
-        CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    paid_price NUMERIC NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT true,
-    purchased_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
-ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
-        CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 3. 학급 특권 경매 (auctions) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auctions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    icon TEXT NOT NULL DEFAULT '🎁',
-    start_price NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bidder_id TEXT,
-    min_bid_step NUMERIC NOT NULL DEFAULT 50,
-    ends_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ongoing',
-    winner_id TEXT,
-    winning_price NUMERIC,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
-        CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auction_bids (
-    id TEXT PRIMARY KEY,
-    auction_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    bid_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
-CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
-ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
-        CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;` : sqlModalTab === 'seats' ? `-- ==========================================================
--- 교실 자리 배치도 & 부동산 (seats) 테이블 생성 SQL
--- ==========================================================
-CREATE TABLE IF NOT EXISTS public.seats (
-    id TEXT PRIMARY KEY,
-    seat_number NUMERIC NOT NULL DEFAULT 0,
-    row_idx NUMERIC NOT NULL DEFAULT 1,
-    col_idx NUMERIC NOT NULL DEFAULT 1,
-    owner_id TEXT,
-    current_occupant_id TEXT,
-    rental_fee NUMERIC NOT NULL DEFAULT 50,
-    purchase_price NUMERIC NOT NULL DEFAULT 600,
-    is_for_sale BOOLEAN NOT NULL DEFAULT false,
-    sale_price NUMERIC NOT NULL DEFAULT 0,
-    zone TEXT NOT NULL DEFAULT 'middle',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
-CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
-
-ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
-        CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;` : sqlModalTab === 'jobs' ? `-- ==========================================================
--- 1인 1역 직업 목록 (jobs) 테이블 생성 SQL
--- ==========================================================
-CREATE TABLE IF NOT EXISTS public.jobs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    weekly_salary NUMERIC NOT NULL DEFAULT 500,
-    difficulty NUMERIC NOT NULL DEFAULT 2,
-    max_count NUMERIC NOT NULL DEFAULT 2,
-    icon TEXT NOT NULL DEFAULT '💼',
-    category TEXT NOT NULL DEFAULT 'service',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
-ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
-        CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;` : sqlModalTab === 'transactions' ? `-- ==========================================================
--- 전자 통장 거래 내역 (point_transactions) 테이블 생성 SQL
--- ==========================================================
-CREATE TABLE IF NOT EXISTS public.point_transactions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    balance_after NUMERIC NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
-
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
-        CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;` : `-- ==========================================================
--- [전체 통합] 학급 화폐 및 경제 시스템 Supabase 7종 테이블 SQL
--- ==========================================================
-
--- 1. 전자 통장 포인트 거래 내역
-CREATE TABLE IF NOT EXISTS public.point_transactions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    balance_after NUMERIC NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
-        CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 2. 1인 1역 직업 목록
-CREATE TABLE IF NOT EXISTS public.jobs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    weekly_salary NUMERIC NOT NULL DEFAULT 500,
-    difficulty NUMERIC NOT NULL DEFAULT 2,
-    max_count NUMERIC NOT NULL DEFAULT 2,
-    icon TEXT NOT NULL DEFAULT '💼',
-    category TEXT NOT NULL DEFAULT 'service',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
-        CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 3. 학급 자리 배치도 & 부동산
-CREATE TABLE IF NOT EXISTS public.seats (
-    id TEXT PRIMARY KEY,
-    seat_number NUMERIC NOT NULL DEFAULT 0,
-    row_idx NUMERIC NOT NULL DEFAULT 1,
-    col_idx NUMERIC NOT NULL DEFAULT 1,
-    owner_id TEXT,
-    current_occupant_id TEXT,
-    rental_fee NUMERIC NOT NULL DEFAULT 50,
-    purchase_price NUMERIC NOT NULL DEFAULT 600,
-    is_for_sale BOOLEAN NOT NULL DEFAULT false,
-    sale_price NUMERIC NOT NULL DEFAULT 0,
-    zone TEXT NOT NULL DEFAULT 'middle',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
-CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
-ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
-        CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 4. 학급 상점 상품
-CREATE TABLE IF NOT EXISTS public.shop_items (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    price NUMERIC NOT NULL DEFAULT 100,
-    stock NUMERIC NOT NULL DEFAULT 10,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    icon TEXT NOT NULL DEFAULT '🎟️',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
-        CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 5. 학급 상점 주문 내역
-CREATE TABLE IF NOT EXISTS public.shop_orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    paid_price NUMERIC NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT true,
-    purchased_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
-ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
-        CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 6. 학급 특권 경매
-CREATE TABLE IF NOT EXISTS public.auctions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    icon TEXT NOT NULL DEFAULT '🎁',
-    start_price NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bidder_id TEXT,
-    min_bid_step NUMERIC NOT NULL DEFAULT 50,
-    ends_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ongoing',
-    winner_id TEXT,
-    winning_price NUMERIC,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
-
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
-        CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- 8. 학급 퀘스트 목록
-CREATE TABLE IF NOT EXISTS public.quests (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    reward NUMERIC NOT NULL DEFAULT 100,
-    quest_type TEXT NOT NULL DEFAULT 'homework',
-    icon TEXT NOT NULL DEFAULT '📝',
-    target_type TEXT NOT NULL DEFAULT 'all',
-    target_job_id TEXT,
-    target_student_ids TEXT[],
-    frequency_type TEXT NOT NULL DEFAULT 'daily',
-    due_date TEXT,
-    recurring_days NUMERIC[],
-    stat_reward_type TEXT DEFAULT 'diligence',
-    stat_reward_amount NUMERIC DEFAULT 1,
-    is_archived BOOLEAN NOT NULL DEFAULT false,
-    archived_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
-    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 9. 퀘스트 제출 및 심사 로그
-CREATE TABLE IF NOT EXISTS public.quest_logs (
-    id TEXT PRIMARY KEY,
-    quest_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    target_date TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    submitted_at TIMESTAMPTZ DEFAULT now(),
-    student_memo TEXT,
-    reviewed_at TIMESTAMPTZ,
-    reviewed_by TEXT,
-    reject_reason TEXT,
-    is_paid BOOLEAN NOT NULL DEFAULT false
-);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
-ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
-    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`}
-                  </pre>
-                </div>
-
-                {/* Modal Footer Actions */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
-                  <div className="text-xs text-slate-500 font-medium">
-                    {sqlModalTab === 'quests' ? '📝 퀘스트 & 할일 2개 테이블' : sqlModalTab === 'shop_auction' ? '🏪 상점&경매 4개 테이블' : sqlModalTab === 'all' ? '📦 전체 9개 테이블' : '선택된 단일 테이블'}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Copy Current Tab Button */}
-                    <button
-                      onClick={() => {
-                        const questsSql = `-- 1. 학급 퀘스트 목록 (quests) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quests (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    reward NUMERIC NOT NULL DEFAULT 100,
-    quest_type TEXT NOT NULL DEFAULT 'homework',
-    icon TEXT NOT NULL DEFAULT '📝',
-    target_type TEXT NOT NULL DEFAULT 'all',
-    target_job_id TEXT,
-    target_student_ids TEXT[],
-    frequency_type TEXT NOT NULL DEFAULT 'daily',
-    due_date TEXT,
-    recurring_days NUMERIC[],
-    stat_reward_type TEXT DEFAULT 'diligence',
-    stat_reward_amount NUMERIC DEFAULT 1,
-    is_archived BOOLEAN NOT NULL DEFAULT false,
-    archived_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
-    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quest_logs (
-    id TEXT PRIMARY KEY,
-    quest_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    target_date TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    submitted_at TIMESTAMPTZ DEFAULT now(),
-    student_memo TEXT,
-    reviewed_at TIMESTAMPTZ,
-    reviewed_by TEXT,
-    reject_reason TEXT,
-    is_paid BOOLEAN NOT NULL DEFAULT false
-);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
-ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
-    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-
-                        const shopAuctionSql = `-- 1. 학급 상점 상품 (shop_items) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_items (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    price NUMERIC NOT NULL DEFAULT 100,
-    stock NUMERIC NOT NULL DEFAULT 10,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    icon TEXT NOT NULL DEFAULT '🎟️',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
-    CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    paid_price NUMERIC NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT true,
-    purchased_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
-ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
-    CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 3. 학급 특권 경매 (auctions) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auctions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    icon TEXT NOT NULL DEFAULT '🎁',
-    start_price NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bidder_id TEXT,
-    min_bid_step NUMERIC NOT NULL DEFAULT 50,
-    ends_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ongoing',
-    winner_id TEXT,
-    winning_price NUMERIC,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
-    CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auction_bids (
-    id TEXT PRIMARY KEY,
-    auction_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    bid_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
-CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
-ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
-    CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-
-                        const seatsSql = `CREATE TABLE IF NOT EXISTS public.seats (
-    id TEXT PRIMARY KEY,
-    seat_number NUMERIC NOT NULL DEFAULT 0,
-    row_idx NUMERIC NOT NULL DEFAULT 1,
-    col_idx NUMERIC NOT NULL DEFAULT 1,
-    owner_id TEXT,
-    current_occupant_id TEXT,
-    rental_fee NUMERIC NOT NULL DEFAULT 50,
-    purchase_price NUMERIC NOT NULL DEFAULT 600,
-    is_for_sale BOOLEAN NOT NULL DEFAULT false,
-    sale_price NUMERIC NOT NULL DEFAULT 0,
-    zone TEXT NOT NULL DEFAULT 'middle',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
-CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
-ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
-    CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-
-                        const jobsSql = `CREATE TABLE IF NOT EXISTS public.jobs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    weekly_salary NUMERIC NOT NULL DEFAULT 500,
-    difficulty NUMERIC NOT NULL DEFAULT 2,
-    max_count NUMERIC NOT NULL DEFAULT 2,
-    icon TEXT NOT NULL DEFAULT '💼',
-    category TEXT NOT NULL DEFAULT 'service',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
-    CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-
-                        const transSql = `CREATE TABLE IF NOT EXISTS public.point_transactions (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    balance_after NUMERIC NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
-    CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-
-                        const allSql = `${transSql}\n\n${jobsSql}\n\n${seatsSql}\n\n${shopAuctionSql}\n\n${questsSql}`;
-
-                        const copyText = 
-                          sqlModalTab === 'quests' ? questsSql :
-                          sqlModalTab === 'shop_auction' ? shopAuctionSql :
-                          sqlModalTab === 'seats' ? seatsSql :
-                          sqlModalTab === 'jobs' ? jobsSql :
-                          sqlModalTab === 'transactions' ? transSql : allSql;
-
-                        navigator.clipboard.writeText(copyText);
-                        showToast(
-                          sqlModalTab === 'quests'
-                            ? '📝 퀘스트 & 할일 관리 전용 SQL(2개 테이블)이 복사되었습니다!'
-                            : sqlModalTab === 'shop_auction' 
-                            ? '🏪 상점 & 특권 경매 전용 SQL(4개 테이블)이 복사되었습니다!'
-                            : `${sqlModalTab === 'all' ? '전체 통합' : '선택된'} SQL이 클립보드에 복사되었습니다!`
-                        );
-                      }}
-                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <span>📋 {sqlModalTab === 'quests' ? '퀘스트 SQL만 복사' : sqlModalTab === 'shop_auction' ? '상점 & 경매 SQL만 복사' : sqlModalTab === 'all' ? '전체 SQL 복사' : '선택한 탭 SQL 복사'}</span>
-                    </button>
-
-                    {/* Quick Copy Quests */}
-                    {sqlModalTab !== 'quests' && (
-                      <button
-                        onClick={() => {
-                          const questsSql = `-- 1. 학급 퀘스트 목록 (quests) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quests (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    reward NUMERIC NOT NULL DEFAULT 100,
-    quest_type TEXT NOT NULL DEFAULT 'homework',
-    icon TEXT NOT NULL DEFAULT '📝',
-    target_type TEXT NOT NULL DEFAULT 'all',
-    target_job_id TEXT,
-    target_student_ids TEXT[],
-    frequency_type TEXT NOT NULL DEFAULT 'daily',
-    due_date TEXT,
-    recurring_days NUMERIC[],
-    stat_reward_type TEXT DEFAULT 'diligence',
-    stat_reward_amount NUMERIC DEFAULT 1,
-    is_archived BOOLEAN NOT NULL DEFAULT false,
-    archived_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
-    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.quest_logs (
-    id TEXT PRIMARY KEY,
-    quest_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    target_date TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    submitted_at TIMESTAMPTZ DEFAULT now(),
-    student_memo TEXT,
-    reviewed_at TIMESTAMPTZ,
-    reviewed_by TEXT,
-    reject_reason TEXT,
-    is_paid BOOLEAN NOT NULL DEFAULT false
-);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
-CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
-ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
-    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-                          navigator.clipboard.writeText(questsSql);
-                          showToast('📝 퀘스트 & 할일 전용 SQL(2개 테이블)이 복사되었습니다!');
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <span>📝 퀘스트만 복사</span>
-                      </button>
-                    )}
-
-                    {/* Quick Copy Shop & Auctions */}
-                    {sqlModalTab !== 'shop_auction' && (
-                      <button
-                        onClick={() => {
-                          const shopAuctionSql = `-- 1. 학급 상점 상품 (shop_items) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_items (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    price NUMERIC NOT NULL DEFAULT 100,
-    stock NUMERIC NOT NULL DEFAULT 10,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    icon TEXT NOT NULL DEFAULT '🎟️',
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
-    CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.shop_orders (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    paid_price NUMERIC NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT true,
-    purchased_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
-ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
-    CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 3. 학급 특권 경매 (auctions) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auctions (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    icon TEXT NOT NULL DEFAULT '🎁',
-    start_price NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
-    current_highest_bidder_id TEXT,
-    min_bid_step NUMERIC NOT NULL DEFAULT 50,
-    ends_at TIMESTAMPTZ NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ongoing',
-    winner_id TEXT,
-    winning_price NUMERIC,
-    category TEXT NOT NULL DEFAULT 'privilege',
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
-    CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;
-
--- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
-CREATE TABLE IF NOT EXISTS public.auction_bids (
-    id TEXT PRIMARY KEY,
-    auction_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    bid_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
-CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
-ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
-    CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-END IF; END $$;`;
-                          navigator.clipboard.writeText(shopAuctionSql);
-                          showToast('🏪 상점 & 특권 경매 전용 SQL(4개 테이블)이 복사되었습니다!');
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <span>🏪 상점&경매만 복사</span>
-                      </button>
-                    )}
-
-                    {/* Close Button */}
-                    <button
-                      onClick={() => setShowSqlGuideModal(false)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
-                    >
-                      닫기
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -4483,6 +3786,282 @@ END IF; END $$;`;
               <button
                 type="button"
                 onClick={handleExecuteDeleteShopItem}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>삭제하기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add New Tax Policy */}
+      {showAddTaxModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl font-bold">
+                  ⚖️
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-850">새 세금 / 공제 정책 등록</h3>
+                  <p className="text-xs text-slate-400">주급 정산 시 자동 공제될 정책을 생성합니다.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddTaxModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTaxSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  세금 정책 이름 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="예: 학급 소득세, 환경 보전 기금, 청소 지각 벌금"
+                  value={newTaxName}
+                  onChange={(e) => setNewTaxName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  정책 설명 및 목적 <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="예: 학생 주급에서 공제되어 학급 비품 및 이벤트 기금으로 활용됩니다."
+                  value={newTaxDesc}
+                  onChange={(e) => setNewTaxDesc(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    과세 방식
+                  </label>
+                  <select
+                    value={newTaxType}
+                    onChange={(e) => setNewTaxType(e.target.value as 'percent' | 'fixed')}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800"
+                  >
+                    <option value="percent">비율 과세 (% 소득세율)</option>
+                    <option value="fixed">고정 정액 과세 (P 고정)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {newTaxType === 'percent' ? '세율 (%)' : '공제 금액 (P)'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={newTaxType === 'percent' ? 100 : 10000}
+                    value={newTaxValue}
+                    onChange={(e) => setNewTaxValue(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="newTaxIsActive"
+                  checked={newTaxIsActive}
+                  onChange={(e) => setNewTaxIsActive(e.target.checked)}
+                  className="w-4 h-4 text-rose-600 rounded cursor-pointer"
+                />
+                <label htmlFor="newTaxIsActive" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  즉시 활성화하여 이번 주 주급 정산부터 적용
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaxModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-sm transition cursor-pointer"
+                >
+                  새 세금 정책 등록 완료
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Existing Tax Policy */}
+      {editingTax && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl font-bold">
+                  ✏️
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-850">세금 / 공제 정책 수정</h3>
+                  <p className="text-xs text-slate-400">세율, 금액, 설명 및 활성화 상태를 변경합니다.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTax(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTaxSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  세금 정책 이름 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editTaxName}
+                  onChange={(e) => setEditTaxName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  정책 상세 설명 <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={editTaxDesc}
+                  onChange={(e) => setEditTaxDesc(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-rose-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    과세 방식
+                  </label>
+                  <select
+                    value={editTaxType}
+                    onChange={(e) => setEditTaxType(e.target.value as 'percent' | 'fixed')}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800"
+                  >
+                    <option value="percent">비율 과세 (% 소득세율)</option>
+                    <option value="fixed">고정 정액 과세 (P 고정)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {editTaxType === 'percent' ? '세율 (%)' : '공제 금액 (P)'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={editTaxType === 'percent' ? 100 : 10000}
+                    value={editTaxValue}
+                    onChange={(e) => setEditTaxValue(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-800"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="editTaxIsActive"
+                  checked={editTaxIsActive}
+                  onChange={(e) => setEditTaxIsActive(e.target.checked)}
+                  className="w-4 h-4 text-rose-600 rounded cursor-pointer"
+                />
+                <label htmlFor="editTaxIsActive" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  이 세금 정책을 활성화 상태로 유지
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingTax(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-sm transition cursor-pointer"
+                >
+                  수정 내용 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Tax Policy Confirmation */}
+      {deletingTaxTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-xl">
+                🗑️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-850">세금 정책 삭제</h3>
+                <p className="text-xs text-slate-500">해당 세금 항목을 완전히 삭제합니다.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-850">{deletingTaxTarget.name}</span>
+                <span className="font-mono text-rose-600 font-bold ml-auto">
+                  {deletingTaxTarget.value}{deletingTaxTarget.taxType === 'percent' ? '%' : 'P'}
+                </span>
+              </div>
+              <p className="text-slate-500 text-[11px]">{deletingTaxTarget.description}</p>
+              <p className="text-rose-600 font-semibold text-[11px] pt-1 border-t border-slate-200">
+                삭제 시 앞으로 주급 정산에서 이 세금이 더 이상 부과되지 않으며 Supabase에서도 삭제됩니다.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingTaxTarget(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeleteTax}
                 className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />

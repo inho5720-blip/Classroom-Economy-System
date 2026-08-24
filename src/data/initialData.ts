@@ -345,64 +345,7 @@ export const INITIAL_STUDENT_JOBS: StudentJobAssignment[] = [];
 
 export const INITIAL_JOB_APPLICATIONS: JobApplication[] = [];
 
-export const INITIAL_QUESTS: Quest[] = [
-  {
-    id: 'quest-job-daily',
-    title: '오늘의 1인 1역 직업 수행',
-    description: '자신이 맡은 직업의 일일 역할을 성실히 완수하고 인증합니다.',
-    questType: 'job',
-    rewardPoints: 100,
-    statRewardType: 'diligence',
-    statRewardAmount: 2,
-    isRecurring: true,
-    frequencyType: 'recurring',
-    recurringDays: [1, 2, 3, 4, 5], // 월~금
-    targetStudentType: 'all',
-    icon: '💼',
-  },
-  {
-    id: 'quest-math-hw',
-    title: '수학 익힘책 문제 풀기',
-    description: '단원 마무리 문제 풀고 채점 후 오답 수정하기',
-    questType: 'homework',
-    rewardPoints: 100,
-    statRewardType: 'wisdom',
-    statRewardAmount: 2,
-    isRecurring: false,
-    frequencyType: 'once',
-    dueDate: '2026-08-31',
-    targetStudentType: 'all',
-    icon: '📐',
-  },
-  {
-    id: 'quest-reading',
-    title: '아침 독서 20분 & 한 줄 독후감',
-    description: '학급 문고 또는 개인 책을 읽고 인상 깊은 문장과 느낌 기록',
-    questType: 'reading',
-    rewardPoints: 80,
-    statRewardType: 'wisdom',
-    statRewardAmount: 2,
-    isRecurring: true,
-    frequencyType: 'recurring',
-    recurringDays: [1, 2, 3, 4, 5], // 월~금
-    targetStudentType: 'all',
-    icon: '📖',
-  },
-  {
-    id: 'quest-clean-help',
-    title: '교실 바닥 쓰레기 줍기 & 분리수거',
-    description: '교실 환경을 쾌적하게 만들기 위한 자발적 청소 공헌 활동',
-    questType: 'special',
-    rewardPoints: 70,
-    statRewardType: 'contribution',
-    statRewardAmount: 2,
-    isRecurring: true,
-    frequencyType: 'recurring',
-    recurringDays: [1, 2, 3, 4, 5],
-    targetStudentType: 'all',
-    icon: '♻️',
-  },
-];
+export const INITIAL_QUESTS: Quest[] = [];
 
 export const INITIAL_QUEST_LOGS: QuestLog[] = [];
 
@@ -532,55 +475,7 @@ export const INITIAL_SHOP_ORDERS: ShopOrder[] = [];
 // 깨끗한 초기 통장 장부 (신규 거래 발생 시 1건씩 누적)
 export const INITIAL_POINT_LEDGER: PointLedger[] = [];
 
-export const INITIAL_AUCTION_ITEMS: AuctionItem[] = [
-  {
-    id: 'auction-1',
-    title: '👑 [초특급] 선생님과 1:1 맛있는 점심 식사 & 상담권',
-    description: '원하는 점심 메뉴와 함께 선생님과 단둘이 오붓하게 진로와 학교생활을 상담할 수 있는 최고의 특권!',
-    icon: '🍕',
-    startPrice: 800,
-    currentHighestBid: 800,
-    currentHighestBidderId: null,
-    minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString(), // 3일 후 마감
-    status: 'ongoing',
-    winnerId: null,
-    winningPrice: null,
-    category: 'privilege',
-    createdAt: '2026-08-23T00:00:00Z',
-  },
-  {
-    id: 'auction-2',
-    title: '📻 일주일 전담 학급 DJ & 기상송 선곡 독점권',
-    description: '다음 주 월~금 아침 자습 시간과 청소 시간마다 내가 선정한 플레이리스트를 전교생/학급에 직접 방송할 수 있는 DJ 라이선스입니다.',
-    icon: '🎧',
-    startPrice: 500,
-    currentHighestBid: 500,
-    currentHighestBidderId: null,
-    minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString(),
-    status: 'ongoing',
-    winnerId: null,
-    winningPrice: null,
-    category: 'special',
-    createdAt: '2026-08-23T00:00:00Z',
-  },
-  {
-    id: 'auction-3',
-    title: '🪑 1열 명당 VIP 자리 1주일 독점 이용권',
-    description: '선생님 바로 앞 TV 시야 100%, 칠판 명당자리를 자리세 없이 1주일간 독점하여 사용할 수 있는 특별 패스입니다.',
-    icon: '💺',
-    startPrice: 600,
-    currentHighestBid: 600,
-    currentHighestBidderId: null,
-    minBidStep: 50,
-    endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 4).toISOString(),
-    status: 'ongoing',
-    winnerId: null,
-    winningPrice: null,
-    category: 'privilege',
-    createdAt: '2026-08-23T00:00:00Z',
-  },
-];
+// 실시간 특권 경매 초기 데이터 (DB 연동 시 DB 내용 표시, 없으면 빈 목록)
+export const INITIAL_AUCTION_ITEMS: AuctionItem[] = [];
 
 export const INITIAL_AUCTION_BIDS: AuctionBid[] = [];

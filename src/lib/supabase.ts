@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Profile, StudentStats, PointLedger, Job, Seat, ShopItem, ShopOrder, AuctionItem, AuctionBid, Quest, QuestLog } from '../types';
+import { Profile, StudentStats, StatKey, PointLedger, Job, Seat, ShopItem, ShopOrder, AuctionItem, AuctionBid, Quest, QuestLog, TaxSetting } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -86,6 +86,34 @@ export async function fetchStatsFromSupabase(): Promise<Record<string, StudentSt
   } catch (err) {
     console.warn('[Supabase] Error connecting to stats DB:', err);
     return null;
+  }
+}
+
+/**
+ * Supabase DB의 student_stats 테이블에 학생 스탯 저장 또는 업데이트
+ */
+export async function upsertStudentStatsToSupabase(stats: StudentStats): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const row = {
+      user_id: stats.userId,
+      diligence: stats.diligence,
+      frugality: stats.frugality,
+      contribution: stats.contribution,
+      wisdom: stats.wisdom,
+      credit: stats.credit,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('student_stats').upsert(row, { onConflict: 'user_id' });
+    if (error) {
+      console.warn('[Supabase] Failed to upsert student_stats:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error upserting student_stats:', err);
+    return false;
   }
 }
 
@@ -969,8 +997,13 @@ export async function fetchQuestsFromSupabase(): Promise<Quest[] | null> {
         description: row.description || '',
         questType: row.quest_type || row.questType || 'homework',
         rewardPoints: Number(row.reward_points ?? row.rewardPoints ?? 100),
-        statRewardType: row.stat_reward_type || row.statRewardType || undefined,
-        statRewardAmount: row.stat_reward_amount !== undefined ? Number(row.stat_reward_amount) : 1,
+        statRewardType: (row.stat_reward_type || row.statRewardType || undefined) as StatKey | undefined,
+        statRewardAmount:
+          row.stat_reward_amount !== undefined && row.stat_reward_amount !== null
+            ? Number(row.stat_reward_amount)
+            : row.statRewardAmount !== undefined && row.statRewardAmount !== null
+            ? Number(row.statRewardAmount)
+            : 1,
         isRecurring: Boolean(row.is_recurring ?? row.isRecurring ?? true),
         frequencyType: row.frequency_type || row.frequencyType || 'recurring',
         recurringDays,
@@ -1002,7 +1035,7 @@ export async function upsertQuestToSupabase(quest: Quest): Promise<boolean> {
       quest_type: quest.questType,
       reward_points: quest.rewardPoints,
       stat_reward_type: quest.statRewardType || null,
-      stat_reward_amount: quest.statRewardAmount || 1,
+      stat_reward_amount: quest.statRewardAmount !== undefined && quest.statRewardAmount !== null ? Number(quest.statRewardAmount) : 1,
       is_recurring: quest.isRecurring,
       frequency_type: quest.frequencyType || 'recurring',
       recurring_days: quest.recurringDays || null,
@@ -1246,6 +1279,142 @@ export async function bulkUpsertQuestLogsToSupabase(logsList: QuestLog[]): Promi
     return false;
   }
 }
+
+/**
+ * Supabase DB의 tax_settings 테이블에서 모든 세금 정책 조회
+ */
+export async function fetchTaxSettingsFromSupabase(): Promise<TaxSetting[] | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('tax_settings')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.warn('[Supabase] Failed to fetch tax_settings from DB:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return data.map((row: any) => ({
+      id: String(row.id),
+      name: row.name || '세금',
+      taxType: (row.tax_type || row.taxType || 'percent') as 'percent' | 'fixed',
+      value: Number(row.value ?? 0),
+      description: row.description || '',
+      isActive: Boolean(row.is_active ?? row.isActive ?? true),
+    }));
+  } catch (err) {
+    console.warn('[Supabase] Error connecting to tax_settings DB:', err);
+    return null;
+  }
+}
+
+/**
+ * Supabase DB에 세금 정책 1건 추가 또는 Upsert
+ */
+export async function upsertTaxSettingToSupabase(tax: TaxSetting): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const row = {
+      id: tax.id,
+      name: tax.name,
+      tax_type: tax.taxType,
+      value: tax.value,
+      description: tax.description || '',
+      is_active: Boolean(tax.isActive),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('tax_settings').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] Failed to upsert tax_setting in DB:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error upserting tax_setting in DB:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 세금 정책 부분 필드 수정
+ */
+export async function updateTaxSettingInSupabase(taxId: string, updates: Partial<TaxSetting>): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const rowUpdates: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (updates.name !== undefined) rowUpdates.name = updates.name;
+    if (updates.taxType !== undefined) rowUpdates.tax_type = updates.taxType;
+    if (updates.value !== undefined) rowUpdates.value = updates.value;
+    if (updates.description !== undefined) rowUpdates.description = updates.description;
+    if (updates.isActive !== undefined) rowUpdates.is_active = updates.isActive;
+
+    const { error } = await supabase.from('tax_settings').update(rowUpdates).eq('id', taxId);
+    if (error) {
+      console.warn('[Supabase] Failed to update tax_setting in DB:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error updating tax_setting in DB:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB에서 특정 세금 정책 삭제
+ */
+export async function deleteTaxSettingFromSupabase(taxId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('tax_settings').delete().eq('id', taxId);
+    if (error) {
+      console.warn('[Supabase] Failed to delete tax_setting from DB:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error deleting tax_setting from DB:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB에 초기 세금 정책 일괄 시딩
+ */
+export async function bulkUpsertTaxSettingsToSupabase(taxesList: TaxSetting[]): Promise<boolean> {
+  if (!supabase || taxesList.length === 0) return false;
+  try {
+    const rows = taxesList.map((t) => ({
+      id: t.id,
+      name: t.name,
+      tax_type: t.taxType,
+      value: t.value,
+      description: t.description || '',
+      is_active: Boolean(t.isActive),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from('tax_settings').upsert(rows, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] Failed to bulk upsert tax_settings:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error bulk upserting tax_settings:', err);
+    return false;
+  }
+}
+
 
 
 

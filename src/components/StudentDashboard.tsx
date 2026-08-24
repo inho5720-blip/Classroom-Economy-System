@@ -55,6 +55,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
 
   const [isTitleModalOpen, setIsTitleModalOpen] = useState(false);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [showTaxDetailModal, setShowTaxDetailModal] = useState(false);
   const [memoQuestId, setMemoQuestId] = useState<string | null>(null);
   const [memoText, setMemoText] = useState('');
 
@@ -439,13 +440,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
           </div>
 
           {/* 3. 세금 & 자리세 자동 공제 */}
-          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/90 flex flex-col justify-between">
+          <div 
+            onClick={() => setShowTaxDetailModal(true)}
+            className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/90 flex flex-col justify-between cursor-pointer hover:bg-rose-100/60 hover:border-rose-300 transition group"
+            title="클릭하여 이번 주 세금 및 공제 상세 내역 확인"
+          >
             <div className="flex items-center justify-between text-xs text-rose-800 mb-2">
               <span className="font-bold flex items-center gap-1.5">
                 <Scale className="w-3.5 h-3.5 text-rose-600" /> ③ 세금 및 자리세 공제
               </span>
-              <span className="text-[10px] text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full font-bold">
-                자동 공제
+              <span className="text-[10px] text-rose-800 bg-rose-100 group-hover:bg-rose-200 px-2 py-0.5 rounded-full font-bold transition flex items-center gap-1">
+                상세보기 🔍
               </span>
             </div>
             <div className="flex items-baseline gap-1">
@@ -454,8 +459,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
               </span>
               <span className="text-xs font-bold text-rose-700">P</span>
             </div>
-            <p className="text-[11px] text-rose-700/80 mt-2">
-              학급세({estimatedTaxAmount}P) + 자리세({estimatedSeatTax}P)
+            <p className="text-[11px] text-rose-700/80 mt-2 flex items-center justify-between">
+              <span>학급세({estimatedTaxAmount}P) + 자리세({estimatedSeatTax}P)</span>
+              <span className="text-[10px] text-rose-600 font-bold underline underline-offset-2">명세서 확인</span>
             </p>
           </div>
         </div>
@@ -819,13 +825,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
               );
             })}
 
-            {todayActiveQuests.length === 0 && (
+            {quests.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 p-6 space-y-2">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl mx-auto mb-1">
+                  📝
+                </div>
+                <p className="text-sm font-bold text-slate-800">현재 등록된 퀘스트가 없습니다.</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  선생님께서 새로운 학급 퀘스트나 1인 1역 과제를 등록하면 실시간으로 여기에 표시됩니다.
+                </p>
+              </div>
+            ) : todayActiveQuests.length === 0 ? (
               <div className="text-center py-8 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-4 space-y-1.5">
                 <div className="text-2xl">🎉</div>
                 <p className="text-xs font-bold text-slate-700">오늘 할 일과 퀘스트가 모두 완료되었거나 없습니다!</p>
                 <p className="text-[11px] text-slate-400">마감일이 지난 단발성 과제나 이미 완료한 과제는 자동으로 정리됩니다.</p>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Memo writing sub-modal/input if active */}
@@ -1117,6 +1133,178 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
         onClose={() => setIsCustomizerOpen(false)}
         user={currentUser}
       />
+
+      {/* 🧾 Detailed Tax Breakdown Modal */}
+      {showTaxDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center text-xl shadow-2xs">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base sm:text-lg text-slate-850">
+                    🧾 세금 및 공제 정책 상세 명세서
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {currentUser.name} 학생의 이번 주 주급에 적용되는 세부 세금 내역입니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTaxDetailModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm cursor-pointer transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Quick Math Summary Banner */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-gradient-to-br from-slate-50 via-rose-50/40 to-indigo-50/30 border border-slate-200">
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-slate-500">① 세전 예상 수령액</span>
+                <div className="text-lg font-black font-mono text-emerald-700">
+                  +{grossExpectedSalary.toLocaleString()} P
+                </div>
+                <span className="text-[10px] text-slate-400 block">
+                  퀘스트({approvedQuestPoints}P) + 성실({estimatedDiligenceBonus}P)
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-rose-700">② 총 세금/공제 합계</span>
+                <div className="text-lg font-black font-mono text-rose-600">
+                  -{totalEstimatedDeduction.toLocaleString()} P
+                </div>
+                <span className="text-[10px] text-rose-500 block">
+                  학급세({estimatedTaxAmount}P) + 자리세({estimatedSeatTax}P)
+                </span>
+              </div>
+
+              <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
+                <span className="text-[11px] font-bold text-indigo-900">③ 세후 최종 실수령액</span>
+                <div className="text-xl font-black font-mono text-indigo-700">
+                  {estimatedNetSalary.toLocaleString()} P
+                </div>
+                <span className="text-[10px] text-indigo-600 font-semibold block">
+                  주급 지급 시 실제 통장 입금액
+                </span>
+              </div>
+            </div>
+
+            {/* Tax Policies Detailed Item List */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-slate-750 flex items-center gap-1.5">
+                  <span>🏛️</span>
+                  <span>적용 중인 학급 세금 정책 목록 ({taxSettings.filter((t) => t.isActive).length}개 활성)</span>
+                </h4>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  실시간 Supabase 연동 중
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {taxSettings.map((tax) => {
+                  let deduction = 0;
+                  let formulaDesc = '';
+
+                  if (tax.id === 'tax-seat') {
+                    if (!currentSeat) {
+                      deduction = 0;
+                      formulaDesc = '현재 배정된 좌석이 없어 자리세 0P 적용';
+                    } else if (currentSeat.ownerId === currentUser.id) {
+                      deduction = 0;
+                      formulaDesc = `🎉 [${currentSeat.seatNumber}번 자가 좌석] 본인 소유 자리이므로 자리세 100% 전액 면제!`;
+                    } else {
+                      deduction = tax.isActive ? currentSeat.rentalFee : 0;
+                      formulaDesc = `[${currentSeat.seatNumber}번 좌석] 국가/타인 소유 좌석 기본 임대료 (${currentSeat.rentalFee}P)`;
+                    }
+                  } else if (tax.taxType === 'percent') {
+                    deduction = tax.isActive ? Math.round(grossExpectedSalary * (tax.value / 100)) : 0;
+                    formulaDesc = `세전 총액 ${grossExpectedSalary.toLocaleString()}P × ${tax.value}% = ${deduction}P`;
+                  } else {
+                    deduction = tax.isActive ? tax.value : 0;
+                    formulaDesc = `고정 정액 공제 ${tax.value}P`;
+                  }
+
+                  return (
+                    <div
+                      key={tax.id}
+                      className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                        !tax.isActive
+                          ? 'bg-slate-50/50 border-slate-200/60 opacity-60'
+                          : deduction > 0
+                          ? 'bg-rose-50/60 border-rose-200'
+                          : 'bg-emerald-50/60 border-emerald-200'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-sm text-slate-850">{tax.name}</span>
+                          <span
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                              tax.taxType === 'percent'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                : 'bg-blue-100 text-blue-900 border border-blue-200'
+                            }`}
+                          >
+                            {tax.value}
+                            {tax.taxType === 'percent' ? '% 소득세율' : 'P 정액'}
+                          </span>
+                          {!tax.isActive ? (
+                            <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-md font-semibold">
+                              미적용 (비활성)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-semibold">
+                              적용 중
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-600">{tax.description}</p>
+                        <div className="text-[11px] font-mono text-slate-500 bg-white/70 px-2.5 py-1 rounded-lg border border-slate-200/70 inline-block">
+                          💡 계산 방식: {formulaDesc}
+                        </div>
+                      </div>
+
+                      {/* Right Deduction Value */}
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-base font-black font-mono ${
+                            deduction > 0 ? 'text-rose-600' : 'text-emerald-700'
+                          }`}
+                        >
+                          {deduction > 0 ? `-${deduction.toLocaleString()} P` : '0 P (면제)'}
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {tax.isActive ? '주급 정산 시 자동 차감' : '정책 비활성화'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <div className="text-xs text-slate-500">
+                궁금한 세금 항목은 선생님께 문의하세요.
+              </div>
+              <button
+                onClick={() => setShowTaxDetailModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-850 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -685,10 +685,14 @@ export const QuestCalendarView: React.FC = () => {
                       )}
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100">
                         {quest.statRewardType === 'wisdom'
-                          ? '지혜+2'
+                          ? `지혜 +${quest.statRewardAmount ?? 1}`
                           : quest.statRewardType === 'diligence'
-                          ? '성실+2'
-                          : '기여+2'}
+                          ? `성실 +${quest.statRewardAmount ?? 1}`
+                          : quest.statRewardType === 'frugality'
+                          ? `절약 +${quest.statRewardAmount ?? 1}`
+                          : quest.statRewardType === 'credit'
+                          ? `신용 +${quest.statRewardAmount ?? 1}`
+                          : `기여 +${quest.statRewardAmount ?? 1}`}
                       </span>
                       {/* Recurrence Chip */}
                       {quest.frequencyType === 'recurring' ? (
@@ -774,7 +778,19 @@ export const QuestCalendarView: React.FC = () => {
             );
           })}
 
-          {filteredQuests.length === 0 && (
+          {quests.length === 0 ? (
+            <div className="text-center py-12 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 p-6 space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl mx-auto mb-1">
+                📝
+              </div>
+              <p className="text-sm font-bold text-slate-800">
+                현재 등록된 퀘스트가 없습니다.
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                선생님께서 새로운 학급 퀘스트나 1인 1역 과제를 등록하면 실시간으로 여기에 표시됩니다.
+              </p>
+            </div>
+          ) : filteredQuests.length === 0 ? (
             <div className="text-center py-12 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-6 space-y-2">
               <div className="text-3xl">🎉</div>
               <p className="text-sm font-bold text-slate-750">
@@ -784,7 +800,7 @@ export const QuestCalendarView: React.FC = () => {
                 이미 완료했거나 마감일이 지났거나, 해당 요일에 설정된 과제가 없습니다.
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Memo Input Section if opened */}

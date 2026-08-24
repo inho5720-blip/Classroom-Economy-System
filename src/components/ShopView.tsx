@@ -41,6 +41,9 @@ export const ShopView: React.FC = () => {
     createShopItem,
     updateShopItem,
     deleteShopItem,
+    createAuction,
+    closeAuction,
+    deleteAuction,
     triggerCelebration,
   } = useApp();
 
@@ -72,6 +75,16 @@ export const ShopView: React.FC = () => {
   const [editShopCategory, setEditShopCategory] = useState<ShopItem['category']>('privilege');
   const [editShopIcon, setEditShopIcon] = useState('🎟️');
 
+  // Teacher Modals for Auctions
+  const [showAddAuctionModal, setShowAddAuctionModal] = useState(false);
+  const [newAuctionTitle, setNewAuctionTitle] = useState('');
+  const [newAuctionDesc, setNewAuctionDesc] = useState('');
+  const [newAuctionStartPrice, setNewAuctionStartPrice] = useState(500);
+  const [newAuctionMinStep, setNewAuctionMinStep] = useState(50);
+  const [newAuctionDuration, setNewAuctionDuration] = useState(72);
+  const [newAuctionIcon, setNewAuctionIcon] = useState('👑');
+  const [newAuctionCategory, setNewAuctionCategory] = useState<AuctionItem['category']>('privilege');
+
   const showToast = (text: string, isError = false) => {
     setToast({ text, isError });
     setTimeout(() => setToast(null), 4000);
@@ -85,7 +98,7 @@ export const ShopView: React.FC = () => {
     }
   };
 
-  // Teacher Handlers
+  // Teacher Handlers for Shop Items
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newShopName.trim()) return;
@@ -106,6 +119,29 @@ export const ShopView: React.FC = () => {
     setNewShopDesc('');
     setNewShopPrice(200);
     setNewShopStock(10);
+  };
+
+  // Teacher Handlers for Auctions
+  const handleCreateAuctionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAuctionTitle.trim()) return;
+
+    createAuction({
+      title: newAuctionTitle.trim(),
+      description: newAuctionDesc.trim() || '학급 특권 경매 아이템입니다.',
+      startPrice: Number(newAuctionStartPrice),
+      minBidStep: Number(newAuctionMinStep),
+      durationHours: Number(newAuctionDuration),
+      icon: newAuctionIcon || '👑',
+      category: newAuctionCategory,
+    });
+
+    showToast(`'${newAuctionTitle}' 특권 경매가 새로 등록되었습니다!`);
+    setShowAddAuctionModal(false);
+    setNewAuctionTitle('');
+    setNewAuctionDesc('');
+    setNewAuctionStartPrice(500);
+    setNewAuctionMinStep(50);
   };
 
   const handleOpenEdit = (item: ShopItem) => {
@@ -505,16 +541,26 @@ export const ShopView: React.FC = () => {
         <div className="space-y-6">
           {/* Ongoing Auctions Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Gavel className="w-5 h-5 text-amber-600" />
                 <h3 className="text-base font-black text-slate-850">
                   🔥 실시간 진행 중인 경매 ({ongoingAuctions.length}건)
                 </h3>
               </div>
-              <span className="text-xs text-slate-400">
-                상위 입찰 시 이전 입찰자의 포인트는 전자 통장으로 즉시 100% 자동 환불됩니다.
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400">
+                  상위 입찰 시 이전 입찰자의 포인트는 전자 통장으로 즉시 100% 자동 환불됩니다.
+                </span>
+                {isTeacher && (
+                  <button
+                    onClick={() => setShowAddAuctionModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 새 특권 경매 등록
+                  </button>
+                )}
+              </div>
             </div>
 
             {ongoingAuctions.length > 0 ? (
@@ -697,6 +743,38 @@ export const ShopView: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Teacher Administration Controls */}
+                        {isTeacher && (
+                          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                            <button
+                              onClick={() => {
+                                if (confirm(`'${auction.title}' 경매를 지금 즉시 낙찰 마감하시겠습니까?`)) {
+                                  const res = closeAuction(auction.id);
+                                  showToast(res.message, !res.success);
+                                }
+                              }}
+                              className="flex-1 py-1.5 px-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-[11px] border border-purple-200 cursor-pointer transition"
+                            >
+                              조기 낙찰 확정
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `'${auction.title}' 경매를 취소/삭제하시겠습니까? (최고 입찰자가 있을 시 포인트가 전액 환불됩니다)`
+                                  )
+                                ) {
+                                  const res = deleteAuction(auction.id);
+                                  showToast(res.message, !res.success);
+                                }
+                              }}
+                              className="py-1.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] border border-rose-200 cursor-pointer transition"
+                            >
+                              취소/삭제
+                            </button>
+                          </div>
+                        )}
+
                         {/* Bid History Dropdown */}
                         {viewHistoryAuctionId === auction.id && (
                           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs animate-in fade-in">
@@ -746,10 +824,24 @@ export const ShopView: React.FC = () => {
                 })}
               </div>
             ) : (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-xs text-slate-400 space-y-2">
-                <div className="text-4xl">🏛️</div>
-                <div className="font-bold text-slate-700 text-sm">현재 진행 중인 경매가 없습니다.</div>
-                <p>선생님께서 새로운 학급 특권 경매를 등록하면 여기에 실시간으로 표시됩니다.</p>
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-xs text-slate-400 space-y-3 shadow-2xs">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-3xl">
+                  🏛️
+                </div>
+                <div className="font-extrabold text-slate-800 text-base">현재 진행 중인 경매가 없습니다.</div>
+                <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
+                  선생님께서 새로운 학급 특권 경매를 등록하면 여기에 실시간으로 표시됩니다.
+                </p>
+                {isTeacher && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setShowAddAuctionModal(true)}
+                      className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer transition"
+                    >
+                      <Plus className="w-4 h-4" /> 새 특권 경매 등록하기
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1071,6 +1163,162 @@ export const ShopView: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-sm transition cursor-pointer"
                 >
                   수정 저장하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Modal: Add New Auction */}
+      {showAddAuctionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-xl">
+                  👑
+                </div>
+                <h3 className="font-black text-base text-slate-850">새 실시간 특권 경매 등록</h3>
+              </div>
+              <button
+                onClick={() => setShowAddAuctionModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAuctionSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  경매 특권/상품 제목 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="예: 👑 [초특급] 선생님과 1:1 맛있는 점심 식사 & 상담권"
+                  value={newAuctionTitle}
+                  onChange={(e) => setNewAuctionTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  경매 상세 설명 <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="예: 원하는 점심 메뉴와 함께 선생님과 단둘이 오붓하게 진로와 학교생활을 상담할 수 있는 최고의 특권!"
+                  value={newAuctionDesc}
+                  onChange={(e) => setNewAuctionDesc(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-amber-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    시작가 (P) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={50}
+                    step={50}
+                    value={newAuctionStartPrice}
+                    onChange={(e) => setNewAuctionStartPrice(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-800"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    최소 호가 단위 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    step={10}
+                    value={newAuctionMinStep}
+                    onChange={(e) => setNewAuctionMinStep(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono font-bold text-slate-800"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    경매 기간 <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={newAuctionDuration}
+                    onChange={(e) => setNewAuctionDuration(Number(e.target.value))}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800"
+                  >
+                    <option value={1}>1시간 (초스피드)</option>
+                    <option value={3}>3시간 (당일)</option>
+                    <option value={24}>24시간 (1일)</option>
+                    <option value={48}>48시간 (2일)</option>
+                    <option value={72}>72시간 (3일)</option>
+                    <option value={168}>1주일 (7일)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    카테고리
+                  </label>
+                  <select
+                    value={newAuctionCategory}
+                    onChange={(e) => setNewAuctionCategory(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800"
+                  >
+                    <option value="privilege">👑 최고 특권 & 권한</option>
+                    <option value="experience">🎒 특별 활동 / 체험권</option>
+                    <option value="special">✨ 레어 유니크 특혜</option>
+                    <option value="item">🎁 실물 한정판 아이템</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    대표 이모지
+                  </label>
+                  <select
+                    value={newAuctionIcon}
+                    onChange={(e) => setNewAuctionIcon(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800"
+                  >
+                    <option value="👑">👑 특권 / 권한</option>
+                    <option value="🍕">🍕 점심 / 식사</option>
+                    <option value="🎧">🎧 DJ / 선곡권</option>
+                    <option value="💺">💺 명당 자리 독점</option>
+                    <option value="🎬">🎬 영화 / 영상 선택권</option>
+                    <option value="🛡️">🛡️ 숙제 방어 쉴드</option>
+                    <option value="🎟️">🎟️ 프리패스 티켓</option>
+                    <option value="🎁">🎁 시크릿 선물상자</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAuctionModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-sm transition cursor-pointer"
+                >
+                  경매 등록 시작
                 </button>
               </div>
             </form>
