@@ -2981,14 +2981,13 @@ export const TeacherAdminView: React.FC = () => {
 
                 <div className="flex-1 overflow-y-auto space-y-3">
                   <p className="text-xs text-slate-600">
-                    아래 SQL 스크립트를 복사하여 Supabase 대시보드의 <strong>SQL Editor</strong>에서 <strong>Run</strong> 버튼을 눌러 실행해주세요.
+                    아래 SQL 스크립트를 복사하여 Supabase 대시보드의 <strong>SQL Editor</strong>에서 <strong>Run</strong> 버튼을 눌러 실행해주세요. (전자 통장 거래 내역 및 1인 1역 직업이 영구 저장됩니다)
                   </p>
                   <pre className="p-3.5 rounded-xl bg-slate-900 text-emerald-400 text-[11px] font-mono overflow-x-auto leading-relaxed select-all">
 {`-- 1. 전자 통장 포인트 거래 내역 테이블 생성
 CREATE TABLE IF NOT EXISTS public.point_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    user_name TEXT,
     amount NUMERIC NOT NULL,
     balance_after NUMERIC NOT NULL,
     category TEXT NOT NULL,
@@ -3008,6 +3007,30 @@ ON public.point_transactions
 FOR ALL
 TO anon, authenticated
 USING (true)
+WITH CHECK (true);
+
+-- 2. 1인 1역 직업 목록 테이블 생성
+CREATE TABLE IF NOT EXISTS public.jobs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    weekly_salary NUMERIC NOT NULL DEFAULT 500,
+    difficulty NUMERIC NOT NULL DEFAULT 2,
+    max_count NUMERIC NOT NULL DEFAULT 2,
+    icon TEXT NOT NULL DEFAULT '💼',
+    category TEXT NOT NULL DEFAULT 'service',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS (Row Level Security) 설정
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read-write for jobs"
+ON public.jobs
+FOR ALL
+TO anon, authenticated
+USING (true)
 WITH CHECK (true);`}
                   </pre>
                 </div>
@@ -3015,10 +3038,10 @@ WITH CHECK (true);`}
                 <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`CREATE TABLE IF NOT EXISTS public.point_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      navigator.clipboard.writeText(`-- 1. 전자 통장 포인트 거래 내역 테이블 생성
+CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    user_name TEXT,
     amount NUMERIC NOT NULL,
     balance_after NUMERIC NOT NULL,
     category TEXT NOT NULL,
@@ -3028,7 +3051,23 @@ WITH CHECK (true);`}
 CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
 ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);`);
+CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 2. 1인 1역 직업 목록 테이블 생성
+CREATE TABLE IF NOT EXISTS public.jobs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    weekly_salary NUMERIC NOT NULL DEFAULT 500,
+    difficulty NUMERIC NOT NULL DEFAULT 2,
+    max_count NUMERIC NOT NULL DEFAULT 2,
+    icon TEXT NOT NULL DEFAULT '💼',
+    category TEXT NOT NULL DEFAULT 'service',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);`);
                       showToast('SQL 스크립트가 클립보드에 복사되었습니다!');
                     }}
                     className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"

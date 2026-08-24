@@ -47,6 +47,11 @@ import {
   insertPointTransactionToSupabase,
   resetPointTransactionsInSupabase,
   updateProfileInSupabase,
+  fetchJobsFromSupabase,
+  insertJobToSupabase,
+  updateJobInSupabase,
+  deleteJobFromSupabase,
+  bulkUpsertJobsToSupabase,
   isSupabaseConfigured,
 } from '../lib/supabase';
 
@@ -357,10 +362,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     async function syncFromSupabase() {
       try {
-        const [cloudProfiles, cloudStats, cloudLedger] = await Promise.all([
+        const [cloudProfiles, cloudStats, cloudLedger, cloudJobs] = await Promise.all([
           fetchProfilesFromSupabase(),
           fetchStatsFromSupabase(),
           fetchPointLedgersFromSupabase(),
+          fetchJobsFromSupabase(),
         ]);
 
         if (!isMounted) return;
@@ -385,6 +391,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // 최신순 정렬
           const sorted = [...cloudLedger].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
           setPointLedger(sorted);
+        }
+
+        if (cloudJobs !== null) {
+          if (cloudJobs.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudJobs.length} jobs from DB.`);
+            setJobs(cloudJobs);
+          } else {
+            // DB 테이블이 비어있는 경우 기본 직업들을 Supabase에 시딩하여 저장
+            console.log(`[Supabase] Jobs table is empty. Seeding initial jobs to Supabase DB...`);
+            bulkUpsertJobsToSupabase(INITIAL_JOBS).catch((e) =>
+              console.warn('[Supabase] Initial jobs seeding failed:', e)
+            );
+            setJobs(INITIAL_JOBS);
+          }
         }
       } catch (e) {
         console.warn('[Supabase] Initial sync warning:', e);
@@ -744,11 +764,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Job management
   const addJob = (jobData: Omit<Job, 'id'>) => {
     const id = `job-${Date.now()}`;
-    setJobs((prev) => [...prev, { ...jobData, id }]);
+    const newJob: Job = { ...jobData, id };
+    setJobs((prev) => [...prev, newJob]);
+
+    if (isSupabaseConfigured) {
+      insertJobToSupabase(newJob).catch((e) =>
+        console.warn('[Supabase] Failed to insert added job:', e)
+      );
+    }
   };
 
   const updateJob = (jobId: string, updates: Partial<Job>) => {
     setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, ...updates } : j)));
+
+    if (isSupabaseConfigured) {
+      updateJobInSupabase(jobId, updates).catch((e) =>
+        console.warn('[Supabase] Failed to update job in DB:', e)
+      );
+    }
   };
 
   const deleteJob = (jobId: string) => {
@@ -760,6 +793,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
     setJobs((prev) => prev.filter((j) => j.id !== jobId));
+
+    if (isSupabaseConfigured) {
+      deleteJobFromSupabase(jobId).catch((e) =>
+        console.warn('[Supabase] Failed to delete job from DB:', e)
+      );
+    }
     return { success: true, message: '직업이 성공적으로 삭제되었습니다.' };
   };
 
@@ -823,19 +862,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let targetJobId = app.jobId;
 
     // Custom proposed job creation if needed
-    if (app.applicationType === 'custom_proposal' && app.proposedJob) {
+    if (app.jobId === 'custom' && app.proposedJobTitle) {
       const newJobId = `job-prop-${Date.now()}`;
       const newJob: Job = {
         id: newJobId,
-        title: app.proposedJob.title,
-        description: app.proposedJob.description,
-        weeklySalary: customSalary || app.proposedJob.suggestedSalary || 500,
-        difficulty: app.proposedJob.difficulty || 2,
+        title: app.proposedJobTitle,
+        description: app.proposedJobDescription || '학생이 제안한 직업입니다.',
+        weeklySalary: customSalary || app.proposedWeeklySalary || 500,
+        difficulty: 2,
         maxCount: 1,
-        icon: app.proposedJob.icon || '✨',
-        category: app.proposedJob.category || 'service',
+        icon: app.proposedIcon || '✨',
+        category: app.proposedCategory || 'service',
       };
       setJobs((prev) => [...prev, newJob]);
+
+      if (isSupabaseConfigured) {
+        insertJobToSupabase(newJob).catch((e) =>
+          console.warn('[Supabase] Failed to save approved custom job:', e)
+        );
+      }
       targetJobId = newJobId;
     }
 
