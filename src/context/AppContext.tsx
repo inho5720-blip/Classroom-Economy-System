@@ -52,7 +52,34 @@ import {
   updateJobInSupabase,
   deleteJobFromSupabase,
   bulkUpsertJobsToSupabase,
+  fetchSeatsFromSupabase,
+  updateSeatInSupabase,
+  saveAllSeatsToSupabase,
+  fetchShopItemsFromSupabase,
+  upsertShopItemToSupabase,
+  updateShopItemInSupabase,
+  deleteShopItemFromSupabase,
+  bulkUpsertShopItemsToSupabase,
+  fetchShopOrdersFromSupabase,
+  insertShopOrderToSupabase,
+  fetchAuctionsFromSupabase,
+  upsertAuctionToSupabase,
+  updateAuctionInSupabase,
+  deleteAuctionFromSupabase,
+  bulkUpsertAuctionsToSupabase,
+  fetchAuctionBidsFromSupabase,
+  insertAuctionBidToSupabase,
+  fetchQuestsFromSupabase,
+  upsertQuestToSupabase,
+  updateQuestInSupabase,
+  deleteQuestFromSupabase,
+  bulkUpsertQuestsToSupabase,
+  fetchQuestLogsFromSupabase,
+  upsertQuestLogToSupabase,
+  deleteQuestLogFromSupabase,
+  bulkUpsertQuestLogsToSupabase,
   isSupabaseConfigured,
+  supabase,
 } from '../lib/supabase';
 
 export interface PointTrendData {
@@ -99,7 +126,7 @@ interface AppContextType {
   updateJob: (jobId: string, updates: Partial<Job>) => void;
   deleteJob: (jobId: string) => { success: boolean; message: string };
   assignStudentJob: (userId: string, jobId: string) => void;
-  unassignStudentJob: (userId: string) => void;
+  unassignStudentJob: (userId: string, jobId?: string) => void;
 
   // Job Application actions (Students apply/propose & Teacher reviews)
   submitJobApplication: (applicationData: Omit<JobApplication, 'id' | 'appliedAt' | 'status'>) => { success: boolean; message: string };
@@ -163,6 +190,7 @@ interface AppContextType {
   
   // Helper queries
   getStudentJob: (userId: string) => Job | undefined;
+  getStudentJobs: (userId: string) => Job[];
   getStudentTitles: (userId: string) => Title[];
   getRankings: () => { pointsRanking: Profile[]; statRankings: Record<StatKey, { user: Profile; value: number }[]> };
   getUserPointTrend: (userId: string) => PointTrendData[];
@@ -362,11 +390,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     async function syncFromSupabase() {
       try {
-        const [cloudProfiles, cloudStats, cloudLedger, cloudJobs] = await Promise.all([
+        const [
+          cloudProfiles,
+          cloudStats,
+          cloudLedger,
+          cloudJobs,
+          cloudSeats,
+          cloudShopItems,
+          cloudShopOrders,
+          cloudAuctions,
+          cloudAuctionBids,
+          cloudQuests,
+          cloudQuestLogs,
+        ] = await Promise.all([
           fetchProfilesFromSupabase(),
           fetchStatsFromSupabase(),
           fetchPointLedgersFromSupabase(),
           fetchJobsFromSupabase(),
+          fetchSeatsFromSupabase(),
+          fetchShopItemsFromSupabase(),
+          fetchShopOrdersFromSupabase(),
+          fetchAuctionsFromSupabase(),
+          fetchAuctionBidsFromSupabase(),
+          fetchQuestsFromSupabase(),
+          fetchQuestLogsFromSupabase(),
         ]);
 
         if (!isMounted) return;
@@ -406,6 +453,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setJobs(INITIAL_JOBS);
           }
         }
+
+        if (cloudSeats !== null) {
+          if (cloudSeats.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudSeats.length} seats from DB.`);
+            setSeats(cloudSeats);
+          } else {
+            // DB 테이블이 비어있는 경우 기본 24개 자리를 Supabase에 시딩하여 저장
+            console.log(`[Supabase] Seats table is empty. Seeding initial seats to Supabase DB...`);
+            saveAllSeatsToSupabase(INITIAL_SEATS).catch((e) =>
+              console.warn('[Supabase] Initial seats seeding failed:', e)
+            );
+            setSeats(INITIAL_SEATS);
+          }
+        }
+
+        if (cloudShopItems !== null) {
+          if (cloudShopItems.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudShopItems.length} shop items from DB.`);
+            setShopItems(cloudShopItems);
+          } else {
+            console.log(`[Supabase] Shop items table is empty. Seeding initial shop items to Supabase DB...`);
+            bulkUpsertShopItemsToSupabase(INITIAL_SHOP_ITEMS).catch((e) =>
+              console.warn('[Supabase] Initial shop items seeding failed:', e)
+            );
+            setShopItems(INITIAL_SHOP_ITEMS);
+          }
+        }
+
+        if (cloudShopOrders !== null) {
+          console.log(`[Supabase] Successfully loaded ${cloudShopOrders.length} shop orders from DB.`);
+          setShopOrders(cloudShopOrders);
+        }
+
+        if (cloudAuctions !== null) {
+          if (cloudAuctions.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudAuctions.length} auctions from DB.`);
+            setAuctions(cloudAuctions);
+          } else {
+            console.log(`[Supabase] Auctions table is empty. Seeding initial auctions to Supabase DB...`);
+            bulkUpsertAuctionsToSupabase(INITIAL_AUCTION_ITEMS).catch((e) =>
+              console.warn('[Supabase] Initial auctions seeding failed:', e)
+            );
+            setAuctions(INITIAL_AUCTION_ITEMS);
+          }
+        }
+
+        if (cloudAuctionBids !== null) {
+          console.log(`[Supabase] Successfully loaded ${cloudAuctionBids.length} auction bids from DB.`);
+          setAuctionBids(cloudAuctionBids);
+        }
+
+        // 📝 퀘스트 목록 동기화
+        if (cloudQuests !== null) {
+          if (cloudQuests.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudQuests.length} quests from DB.`);
+            setQuests(cloudQuests);
+          } else {
+            console.log(`[Supabase] Quests table is empty. Seeding initial quests to Supabase DB...`);
+            bulkUpsertQuestsToSupabase(INITIAL_QUESTS).catch((e) =>
+              console.warn('[Supabase] Initial quests seeding failed:', e)
+            );
+            setQuests(INITIAL_QUESTS);
+          }
+        }
+
+        // 📝 퀘스트 제출/수행 로그 동기화
+        if (cloudQuestLogs !== null) {
+          if (cloudQuestLogs.length > 0) {
+            console.log(`[Supabase] Successfully loaded ${cloudQuestLogs.length} quest logs from DB.`);
+            setQuestLogs(cloudQuestLogs);
+          } else {
+            console.log(`[Supabase] Quest logs table is empty. Seeding initial quest logs to Supabase DB...`);
+            bulkUpsertQuestLogsToSupabase(INITIAL_QUEST_LOGS).catch((e) =>
+              console.warn('[Supabase] Initial quest logs seeding failed:', e)
+            );
+            setQuestLogs(INITIAL_QUEST_LOGS);
+          }
+        }
       } catch (e) {
         console.warn('[Supabase] Initial sync warning:', e);
       }
@@ -413,8 +538,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     syncFromSupabase();
 
+    // ⚡ Supabase 실시간 변경사항(Realtime Postgres Changes) 구독
+    let realtimeChannel: any = null;
+    if (supabase) {
+      realtimeChannel = supabase
+        .channel('public:quests_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'quests' },
+          async () => {
+            const freshQuests = await fetchQuestsFromSupabase();
+            if (freshQuests && isMounted) {
+              setQuests(freshQuests);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'quest_logs' },
+          async () => {
+            const freshLogs = await fetchQuestLogsFromSupabase();
+            if (freshLogs && isMounted) {
+              setQuestLogs(freshLogs);
+            }
+          }
+        )
+        .subscribe();
+    }
+
     return () => {
       isMounted = false;
+      if (supabase && realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
     };
   }, []);
 
@@ -804,11 +960,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const assignStudentJob = (userId: string, jobId: string) => {
     setStudentJobs((prev) => {
-      const filtered = prev.filter((sj) => sj.userId !== userId);
+      const alreadyAssigned = prev.some((sj) => sj.userId === userId && sj.jobId === jobId && sj.isActive);
+      if (alreadyAssigned) return prev;
       return [
-        ...filtered,
+        ...prev,
         {
-          id: `assign-${Date.now()}`,
+          id: `assign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           userId,
           jobId,
           assignedAt: new Date().toISOString().split('T')[0],
@@ -818,8 +975,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const unassignStudentJob = (userId: string) => {
-    setStudentJobs((prev) => prev.filter((sj) => sj.userId !== userId));
+  const unassignStudentJob = (userId: string, jobId?: string) => {
+    setStudentJobs((prev) => {
+      if (jobId) {
+        return prev.filter((sj) => !(sj.userId === userId && sj.jobId === jobId));
+      }
+      return prev.filter((sj) => sj.userId !== userId);
+    });
   };
 
   // Job Application actions
@@ -827,12 +989,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applicationData: Omit<JobApplication, 'id' | 'appliedAt' | 'status'>
   ) => {
     const existing = jobApplications.find(
-      (a) => a.userId === applicationData.userId && a.status === 'pending'
+      (a) => a.userId === applicationData.userId && a.jobId === applicationData.jobId && a.status === 'pending'
     );
     if (existing) {
       return {
         success: false,
-        message: '이미 심사 대기 중인 직업 신청서가 있습니다. 결과 발표 후 다시 신청할 수 있습니다.',
+        message: '해당 직업에 이미 심사 대기 중인 직업 신청서가 있습니다. 선생님의 심사를 기다려 주세요.',
       };
     }
 
@@ -948,6 +1110,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Quest actions
   const submitQuestLog = (questId: string, userId: string, targetDate: string, memo?: string) => {
+    let resultingLog: QuestLog | null = null;
     setQuestLogs((prev) => {
       const existingIdx = prev.findIndex((l) => l.questId === questId && l.userId === userId && l.targetDate === targetDate);
       const newLog: QuestLog = {
@@ -960,6 +1123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isPaid: false,
         submittedAt: new Date().toISOString(),
       };
+      resultingLog = newLog;
 
       if (existingIdx >= 0) {
         const copy = [...prev];
@@ -968,19 +1132,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return [newLog, ...prev];
     });
+
+    if (isSupabaseConfigured && resultingLog) {
+      upsertQuestLogToSupabase(resultingLog).catch((err) =>
+        console.warn('[Supabase] Failed to persist quest log:', err)
+      );
+    }
   };
 
   const approveQuestLog = (logId: string, teacherId: string) => {
     const log = questLogs.find((l) => l.id === logId);
     if (!log) return;
 
+    const updatedLog: QuestLog = {
+      ...log,
+      status: 'approved',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: teacherId,
+      rejectReason: undefined,
+    };
+
     setQuestLogs((prev) =>
-      prev.map((l) =>
-        l.id === logId
-          ? { ...l, status: 'approved', reviewedAt: new Date().toISOString(), reviewedBy: teacherId, rejectReason: undefined }
-          : l
-      )
+      prev.map((l) => (l.id === logId ? updatedLog : l))
     );
+
+    if (isSupabaseConfigured) {
+      upsertQuestLogToSupabase(updatedLog).catch((err) =>
+        console.warn('[Supabase] Failed to update approved quest log in DB:', err)
+      );
+    }
 
     // Apply stat bonus according to quest settings or defaults
     const quest = quests.find((q) => q.id === log.questId);
@@ -1009,42 +1189,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Increment consecutive success days for diligence
     setUsers((prev) =>
-      prev.map((u) => (u.id === log.userId ? { ...u, consecutiveSuccessDays: u.consecutiveSuccessDays + 1 } : u))
+      prev.map((u) => {
+        if (u.id === log.userId) {
+          const updatedUser = { ...u, consecutiveSuccessDays: u.consecutiveSuccessDays + 1 };
+          if (isSupabaseConfigured) {
+            updateProfileInSupabase(u.id, { consecutiveSuccessDays: updatedUser.consecutiveSuccessDays }).catch((e) =>
+              console.warn('[Supabase] Failed to update profile success days:', e)
+            );
+          }
+          return updatedUser;
+        }
+        return u;
+      })
     );
   };
 
   const rejectQuestLog = (logId: string, teacherId: string, reason: string) => {
+    const log = questLogs.find((l) => l.id === logId);
+    const updatedLog: QuestLog | null = log
+      ? {
+          ...log,
+          status: 'rejected',
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: teacherId,
+          rejectReason: reason,
+        }
+      : null;
+
     setQuestLogs((prev) =>
-      prev.map((l) =>
-        l.id === logId
-          ? {
-              ...l,
-              status: 'rejected',
-              reviewedAt: new Date().toISOString(),
-              reviewedBy: teacherId,
-              rejectReason: reason,
-            }
-          : l
-      )
+      prev.map((l) => (l.id === logId && updatedLog ? updatedLog : l))
     );
+
+    if (isSupabaseConfigured && updatedLog) {
+      upsertQuestLogToSupabase(updatedLog).catch((err) =>
+        console.warn('[Supabase] Failed to update rejected quest log in DB:', err)
+      );
+    }
   };
 
   const createQuest = (questData: Omit<Quest, 'id'>) => {
-    const id = `quest-${Date.now()}`;
-    setQuests((prev) => [...prev, { ...questData, id }]);
+    const newQuest: Quest = {
+      ...questData,
+      id: `quest-${Date.now()}`,
+    };
+    setQuests((prev) => [...prev, newQuest]);
+
+    if (isSupabaseConfigured) {
+      upsertQuestToSupabase(newQuest).catch((err) =>
+        console.warn('[Supabase] Failed to insert new quest to DB:', err)
+      );
+    }
   };
 
   const deleteQuest = (questId: string, permanent = false) => {
     if (permanent) {
       setQuests((prev) => prev.filter((q) => q.id !== questId));
+      if (isSupabaseConfigured) {
+        deleteQuestFromSupabase(questId).catch((err) =>
+          console.warn('[Supabase] Failed to delete quest from DB:', err)
+        );
+      }
     } else {
+      const archivedAt = new Date().toISOString();
       setQuests((prev) =>
         prev.map((q) =>
           q.id === questId
-            ? { ...q, isArchived: true, archivedAt: new Date().toISOString() }
+            ? { ...q, isArchived: true, archivedAt }
             : q
         )
       );
+      if (isSupabaseConfigured) {
+        updateQuestInSupabase(questId, { isArchived: true, archivedAt }).catch((err) =>
+          console.warn('[Supabase] Failed to archive quest in DB:', err)
+        );
+      }
     }
   };
 
@@ -1060,6 +1278,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : q
       )
     );
+    if (isSupabaseConfigured) {
+      updateQuestInSupabase(questId, { isArchived: false, archivedAt: undefined }).catch((err) =>
+        console.warn('[Supabase] Failed to restore quest in DB:', err)
+      );
+    }
   };
 
   // Salary & Economy actions
@@ -1142,8 +1365,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
-    // Mark unpaid logs as paid
-    setQuestLogs((prev) => prev.map((l) => (l.status === 'approved' ? { ...l, isPaid: true } : l)));
+    // Mark unpaid logs as paid & Sync to Supabase
+    setQuestLogs((prev) =>
+      prev.map((l) => {
+        if (l.status === 'approved' && !l.isPaid) {
+          const paidLog = { ...l, isPaid: true };
+          if (isSupabaseConfigured) {
+            upsertQuestLogToSupabase(paidLog).catch((e) =>
+              console.warn('[Supabase] Failed to update isPaid for quest log:', e)
+            );
+          }
+          return paidLog;
+        }
+        return l;
+      })
+    );
     setUsers((prev) => prev.map((u) => updatedStudents.find((s) => s.id === u.id) || u));
 
     triggerCelebration();
@@ -1189,6 +1425,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers((prev) => prev.map((u) => (u.id === studentId ? { ...u, points: newPoints } : u)));
     setSeats((prev) => prev.map((s) => (s.id === seat.id ? { ...s, ownerId: studentId } : s)));
 
+    // Supabase seat ownership sync
+    if (isSupabaseConfigured) {
+      updateSeatInSupabase(seat.id, { ownerId: studentId }).catch((err) =>
+        console.warn('[Supabase] Failed to update seat owner:', err)
+      );
+    }
+
     // Record ledger & Supabase Sync
     recordPointTransaction(
       studentId,
@@ -1223,10 +1466,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setSeats((prev) => prev.map((s) => (s.id === seat.id ? { ...s, isForSale: true, salePrice: price } : s)));
+
+    if (isSupabaseConfigured) {
+      updateSeatInSupabase(seat.id, { isForSale: true, salePrice: price }).catch((err) =>
+        console.warn('[Supabase] Failed to list seat for sale:', err)
+      );
+    }
+
     return { success: true, message: `${seat.seatNumber}번 자리가 ${price}P에 당근마켓에 등록되었습니다!` };
   };
 
   const cancelSeatSale = (seatIdOrNumber: string | number, sellerId: string) => {
+    const targetSeat = seats.find(
+      (s) => (s.id === String(seatIdOrNumber) || s.seatNumber === Number(seatIdOrNumber)) && s.ownerId === sellerId
+    );
+
     setSeats((prev) =>
       prev.map((s) =>
         (s.id === String(seatIdOrNumber) || s.seatNumber === Number(seatIdOrNumber)) && s.ownerId === sellerId
@@ -1234,6 +1488,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : s
       )
     );
+
+    if (targetSeat && isSupabaseConfigured) {
+      updateSeatInSupabase(targetSeat.id, { isForSale: false, salePrice: 0 }).catch((err) =>
+        console.warn('[Supabase] Failed to cancel seat sale:', err)
+      );
+    }
   };
 
   const buySeatFromStudent = (seatIdOrNumber: string | number, buyerId: string) => {
@@ -1271,6 +1531,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.id === seat.id ? { ...s, ownerId: buyerId, isForSale: false, salePrice: 0 } : s))
     );
 
+    if (isSupabaseConfigured) {
+      updateSeatInSupabase(seat.id, { ownerId: buyerId, isForSale: false, salePrice: 0 }).catch((err) =>
+        console.warn('[Supabase] Failed to transfer seat ownership in DB:', err)
+      );
+    }
+
     // Point ledgers & Supabase sync
     recordPointTransaction(
       buyerId,
@@ -1298,26 +1564,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateSeat = (seatId: string, updates: Partial<Seat>) => {
     setSeats((prev) => prev.map((s) => (s.id === seatId ? { ...s, ...updates } : s)));
+    if (isSupabaseConfigured) {
+      updateSeatInSupabase(seatId, updates).catch((err) =>
+        console.warn('[Supabase] Failed to update seat:', err)
+      );
+    }
   };
 
   const updateAllSeats = (newSeats: Seat[]) => {
     setSeats(newSeats);
+    if (isSupabaseConfigured) {
+      saveAllSeatsToSupabase(newSeats).catch((err) =>
+        console.warn('[Supabase] Failed to save all seats:', err)
+      );
+    }
   };
 
   const toggleSeatActive = (seatId: string) => {
+    let updatedSeat: Seat | null = null;
     setSeats((prev) =>
       prev.map((s) => {
         if (s.id !== seatId) return s;
         const willBeActive = !s.isActive;
-        return {
+        const next = {
           ...s,
           isActive: willBeActive,
           currentOccupantId: willBeActive ? s.currentOccupantId : null,
           isForSale: willBeActive ? s.isForSale : false,
           salePrice: willBeActive ? s.salePrice : 0,
         };
+        updatedSeat = next;
+        return next;
       })
     );
+
+    if (updatedSeat && isSupabaseConfigured) {
+      updateSeatInSupabase(seatId, updatedSeat).catch((err) =>
+        console.warn('[Supabase] Failed to toggle seat active in DB:', err)
+      );
+    }
   };
 
   const rebuildSeatGrid = (
@@ -1370,71 +1655,124 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setSeats(newSeatsList);
+    if (isSupabaseConfigured) {
+      saveAllSeatsToSupabase(newSeatsList).catch((err) =>
+        console.warn('[Supabase] Failed to save rebuilt seat grid:', err)
+      );
+    }
   };
 
   const bulkUpdateSeatTaxes = (rentalFee: number, purchasePrice: number) => {
-    setSeats((prev) =>
-      prev.map((s) => ({
-        ...s,
-        rentalFee: Number(rentalFee),
-        purchasePrice: Number(purchasePrice),
-      }))
-    );
+    const updatedList = seats.map((s) => ({
+      ...s,
+      rentalFee: Number(rentalFee),
+      purchasePrice: Number(purchasePrice),
+    }));
+
+    setSeats(updatedList);
     // Sync taxSettings for 'tax-seat'
     setTaxSettings((prev) =>
       prev.map((t) => (t.id === 'tax-seat' ? { ...t, value: Number(rentalFee) } : t))
     );
+
+    if (isSupabaseConfigured) {
+      saveAllSeatsToSupabase(updatedList).catch((err) =>
+        console.warn('[Supabase] Failed to bulk update seat taxes:', err)
+      );
+    }
   };
 
   const autoRenumberSeats = () => {
-    setSeats((prev) => {
-      const sorted = [...prev].sort((a, b) => {
-        if (a.rowIdx !== b.rowIdx) return a.rowIdx - b.rowIdx;
-        return a.colIdx - b.colIdx;
-      });
-      let num = 1;
-      return sorted.map((s) => {
-        if (s.isActive) {
-          const seatNum = num++;
-          return { ...s, seatNumber: seatNum };
-        }
-        return { ...s, seatNumber: 0 };
-      });
+    const sorted = [...seats].sort((a, b) => {
+      if (a.rowIdx !== b.rowIdx) return a.rowIdx - b.rowIdx;
+      return a.colIdx - b.colIdx;
     });
+    let num = 1;
+    const renumbered = sorted.map((s) => {
+      if (s.isActive) {
+        const seatNum = num++;
+        return { ...s, seatNumber: seatNum };
+      }
+      return { ...s, seatNumber: 0 };
+    });
+
+    setSeats(renumbered);
+    if (isSupabaseConfigured) {
+      saveAllSeatsToSupabase(renumbered).catch((err) =>
+        console.warn('[Supabase] Failed to save renumbered seats:', err)
+      );
+    }
   };
 
   const assignSeatOccupant = (seatId: string, studentId: string | null) => {
+    let affectedSeatIds: { id: string; currentOccupantId: string | null }[] = [];
+
     setSeats((prev) =>
       prev.map((s) => {
         if (studentId && s.currentOccupantId === studentId && s.id !== seatId) {
+          affectedSeatIds.push({ id: s.id, currentOccupantId: null });
           return { ...s, currentOccupantId: null };
         }
         if (s.id === seatId) {
+          affectedSeatIds.push({ id: s.id, currentOccupantId: studentId });
           return { ...s, currentOccupantId: studentId };
         }
         return s;
       })
     );
+
+    if (isSupabaseConfigured && affectedSeatIds.length > 0) {
+      affectedSeatIds.forEach((item) => {
+        updateSeatInSupabase(item.id, { currentOccupantId: item.currentOccupantId }).catch((err) =>
+          console.warn('[Supabase] Failed to assign occupant in DB:', err)
+        );
+      });
+    }
   };
 
   const resetSeatOwnership = (seatId: string) => {
     setSeats((prev) =>
       prev.map((s) => (s.id === seatId ? { ...s, ownerId: null, isForSale: false, salePrice: 0 } : s))
     );
+
+    if (isSupabaseConfigured) {
+      updateSeatInSupabase(seatId, { ownerId: null, isForSale: false, salePrice: 0 }).catch((err) =>
+        console.warn('[Supabase] Failed to reset seat ownership in DB:', err)
+      );
+    }
   };
 
   // Shop actions
   const createShopItem = (itemData: Omit<ShopItem, 'id'>) => {
     const id = `item-${Date.now()}`;
-    setShopItems((prev) => [...prev, { ...itemData, id }]);
+    const newItem: ShopItem = { ...itemData, id };
+    setShopItems((prev) => [...prev, newItem]);
+
+    if (isSupabaseConfigured) {
+      upsertShopItemToSupabase(newItem).catch((err) =>
+        console.warn('[Supabase] Failed to create shop item in DB:', err)
+      );
+    }
   };
 
   const updateShopItem = (itemId: string, updates: Partial<ShopItem>) => {
     setShopItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+
+    if (isSupabaseConfigured) {
+      updateShopItemInSupabase(itemId, updates).catch((err) =>
+        console.warn('[Supabase] Failed to update shop item in DB:', err)
+      );
+    }
   };
 
   const deleteShopItem = (itemId: string) => {
     setShopItems((prev) => prev.filter((item) => item.id !== itemId));
+
+    if (isSupabaseConfigured) {
+      deleteShopItemFromSupabase(itemId).catch((err) =>
+        console.warn('[Supabase] Failed to delete shop item in DB:', err)
+      );
+    }
   };
 
   const purchaseShopItem = (itemId: string, studentId: string) => {
@@ -1447,26 +1785,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: `포인트가 부족합니다. (필요: ${item.price}P / 보유: ${student.points}P)` };
     }
 
+    const nextStock = item.stock - 1;
+
     // Decrement stock
-    setShopItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, stock: i.stock - 1 } : i)));
+    setShopItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, stock: nextStock } : i)));
+
+    if (isSupabaseConfigured) {
+      updateShopItemInSupabase(itemId, { stock: nextStock }).catch((err) =>
+        console.warn('[Supabase] Failed to update item stock in DB:', err)
+      );
+    }
 
     // Deduct student points
     const newPoints = student.points - item.price;
     setUsers((prev) => prev.map((u) => (u.id === studentId ? { ...u, points: newPoints, unspentDays: 0 } : u)));
 
     // Record order
-    setShopOrders((prev) => [
-      {
-        id: `order-${Date.now()}`,
-        userId: studentId,
-        itemId,
-        itemName: item.name,
-        paidPrice: item.price,
-        isUsed: true,
-        purchasedAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    const newOrder: ShopOrder = {
+      id: `order-${Date.now()}`,
+      userId: studentId,
+      itemId,
+      itemName: item.name,
+      paidPrice: item.price,
+      isUsed: true,
+      purchasedAt: new Date().toISOString(),
+    };
+
+    setShopOrders((prev) => [newOrder, ...prev]);
+
+    if (isSupabaseConfigured) {
+      insertShopOrderToSupabase(newOrder).catch((err) =>
+        console.warn('[Supabase] Failed to insert shop order in DB:', err)
+      );
+    }
 
     // Record point ledger & Supabase Sync
     recordPointTransaction(
@@ -1575,6 +1926,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setAuctionBids((prev) => [newBid, ...prev]);
 
+    if (isSupabaseConfigured) {
+      insertAuctionBidToSupabase(newBid).catch((err) =>
+        console.warn('[Supabase] Failed to insert auction bid in DB:', err)
+      );
+    }
+
     // 5. Update auction highest bid
     setAuctions((prev) =>
       prev.map((a) =>
@@ -1587,6 +1944,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : a
       )
     );
+
+    if (isSupabaseConfigured) {
+      updateAuctionInSupabase(auctionId, {
+        currentHighestBid: amount,
+        currentHighestBidderId: userId,
+      }).catch((err) => console.warn('[Supabase] Failed to update auction highest bid in DB:', err));
+    }
 
     triggerCelebration();
     return {
@@ -1623,11 +1987,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setAuctions((prev) => [newAuction, ...prev]);
+
+    if (isSupabaseConfigured) {
+      upsertAuctionToSupabase(newAuction).catch((err) =>
+        console.warn('[Supabase] Failed to create auction in DB:', err)
+      );
+    }
   };
 
   const closeAuction = (auctionId: string) => {
     const auction = auctions.find((a) => a.id === auctionId);
     if (!auction) return { success: false, message: '경매를 찾을 수 없습니다.' };
+
+    const winnerId = auction.currentHighestBidderId;
+    const winningPrice = auction.currentHighestBidderId ? auction.currentHighestBid : null;
 
     setAuctions((prev) =>
       prev.map((a) =>
@@ -1635,12 +2008,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? {
               ...a,
               status: 'ended',
-              winnerId: a.currentHighestBidderId,
-              winningPrice: a.currentHighestBidderId ? a.currentHighestBid : null,
+              winnerId,
+              winningPrice,
             }
           : a
       )
     );
+
+    if (isSupabaseConfigured) {
+      updateAuctionInSupabase(auctionId, {
+        status: 'ended',
+        winnerId,
+        winningPrice,
+      }).catch((err) => console.warn('[Supabase] Failed to close auction in DB:', err));
+    }
 
     const winner = users.find((u) => u.id === auction.currentHighestBidderId);
     if (winner) {
@@ -1686,6 +2067,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setAuctions((prev) => prev.filter((a) => a.id !== auctionId));
+
+    if (isSupabaseConfigured) {
+      deleteAuctionFromSupabase(auctionId).catch((err) =>
+        console.warn('[Supabase] Failed to delete auction in DB:', err)
+      );
+    }
+
     return { success: true, message: '경매가 성공적으로 삭제/취소되었습니다.' };
   };
 
@@ -1725,6 +2113,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const assign = studentJobs.find((sj) => sj.userId === userId && sj.isActive);
     if (!assign) return undefined;
     return jobs.find((j) => j.id === assign.jobId);
+  };
+
+  const getStudentJobs = (userId: string): Job[] => {
+    const activeAssignments = studentJobs.filter((sj) => sj.userId === userId && sj.isActive);
+    const activeJobIds = new Set(activeAssignments.map((a) => a.jobId));
+    return jobs.filter((j) => activeJobIds.has(j.id));
   };
 
   const getStudentTitles = (userId: string) => {
@@ -1868,6 +2262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         equipTitle,
         updateStats,
         getStudentJob,
+        getStudentJobs,
         getStudentTitles,
         getRankings,
         getUserPointTrend,

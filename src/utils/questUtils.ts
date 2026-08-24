@@ -81,7 +81,7 @@ export function isQuestActiveForDateAndStudent(
   dateStr: string,
   studentId: string,
   questLogs: QuestLog[] = [],
-  studentJobId?: string,
+  studentJobId?: string | string[],
   isTeacher = false
 ): boolean {
   // If quest is deleted/archived, it only appears on historical dates where a submission/log already exists
@@ -103,7 +103,15 @@ export function isQuestActiveForDateAndStudent(
 
   // 2. Target job check
   if (!isTeacher && quest.questType === 'job' && quest.targetJobId) {
-    if (studentJobId !== quest.targetJobId) {
+    if (Array.isArray(studentJobId)) {
+      if (!studentJobId.includes(quest.targetJobId)) {
+        return false;
+      }
+    } else if (studentJobId) {
+      if (studentJobId !== quest.targetJobId) {
+        return false;
+      }
+    } else {
       return false;
     }
   }
@@ -188,22 +196,35 @@ export function getQuestRewardForStudent(
   studentJobs: StudentJobAssignment[] = []
 ): number {
   if (quest.questType === 'job') {
-    // 1. If student is provided and has an active job assignment
-    if (userId) {
-      const assignment = studentJobs.find((sj) => sj.userId === userId && sj.isActive);
-      if (assignment) {
-        const studentJob = jobs.find((j) => j.id === assignment.jobId);
-        if (studentJob && studentJob.weeklySalary > 0) {
-          return Math.round(studentJob.weeklySalary / 5);
-        }
-      }
-    }
-
-    // 2. If the quest is linked to a target job ID
+    // 1. If the quest is linked to a target job ID
     if (quest.targetJobId) {
       const targetJob = jobs.find((j) => j.id === quest.targetJobId);
       if (targetJob && targetJob.weeklySalary > 0) {
         return Math.round(targetJob.weeklySalary / 5);
+      }
+    }
+
+    // 2. If student is provided and has active job assignment(s)
+    if (userId) {
+      const assignments = studentJobs.filter((sj) => sj.userId === userId && sj.isActive);
+      if (assignments.length > 0) {
+        // If quest has targetJobId, check for that job
+        if (quest.targetJobId) {
+          const match = assignments.find((a) => a.jobId === quest.targetJobId);
+          if (match) {
+            const matchedJob = jobs.find((j) => j.id === match.jobId);
+            if (matchedJob && matchedJob.weeklySalary > 0) {
+              return Math.round(matchedJob.weeklySalary / 5);
+            }
+          }
+        } else {
+          // General job quest: compute daily reward from all active jobs assigned to the student
+          const userJobs = jobs.filter((j) => assignments.some((a) => a.jobId === j.id));
+          if (userJobs.length > 0) {
+            const totalWeekly = userJobs.reduce((sum, j) => sum + (j.weeklySalary || 0), 0);
+            return Math.round(totalWeekly / 5);
+          }
+        }
       }
     }
 

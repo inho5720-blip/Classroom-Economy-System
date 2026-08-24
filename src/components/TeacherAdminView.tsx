@@ -32,10 +32,13 @@ import {
   RotateCcw,
   AlertTriangle,
   FileCheck2,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Job, Quest, AuctionItem, ShopItem, QuestFrequencyType, QuestTargetType, StatKey } from '../types';
 import { TeacherSeatManagement } from './TeacherSeatManagement';
+import { JobEmojiSelector } from './JobEmojiSelector';
+import { isSupabaseConfigured } from '../lib/supabase';
 import {
   WEEKDAYS,
   QUEST_EMOJI_CATEGORIES,
@@ -56,6 +59,7 @@ export const TeacherAdminView: React.FC = () => {
     shopItems,
     shopOrders,
     auctions,
+    getStudentJobs,
     approveQuestLog,
     rejectQuestLog,
     executeWeeklySalarySettlement,
@@ -89,6 +93,7 @@ export const TeacherAdminView: React.FC = () => {
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [showSqlGuideModal, setShowSqlGuideModal] = useState(false);
+  const [sqlModalTab, setSqlModalTab] = useState<'all' | 'quests' | 'shop_auction' | 'seats' | 'jobs' | 'transactions'>('quests');
 
   // Job Application rejection modal
   const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
@@ -721,11 +726,17 @@ export const TeacherAdminView: React.FC = () => {
         <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-base text-slate-850">고정가 일반 상점 상품 & 재고 관리</h3>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
                   총 {shopItems.length}개 상품
                 </span>
+                {isSupabaseConfigured && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                    <Database className="w-3 h-3 text-emerald-600" />
+                    Supabase DB 연동 활성
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 상점에 진열될 상품을 직접 등록하고, 수량(재고)을 실시간으로 늘리거나 줄이고, 불필요한 상품을 삭제할 수 있습니다.
@@ -1362,7 +1373,7 @@ export const TeacherAdminView: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">주급(P)</label>
                     <input
@@ -1383,16 +1394,13 @@ export const TeacherAdminView: React.FC = () => {
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">이모지</label>
-                    <input
-                      type="text"
-                      value={newJobIcon}
-                      onChange={(e) => setNewJobIcon(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 text-center text-lg"
-                    />
-                  </div>
                 </div>
+
+                <JobEmojiSelector
+                  value={newJobIcon}
+                  onChange={setNewJobIcon}
+                  label="직업 이모지 아이콘 선택"
+                />
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
@@ -1500,7 +1508,7 @@ export const TeacherAdminView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">주급(P)</label>
                     <input
@@ -1521,16 +1529,13 @@ export const TeacherAdminView: React.FC = () => {
                       className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">이모지</label>
-                    <input
-                      type="text"
-                      value={editJobIcon}
-                      onChange={(e) => setEditJobIcon(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 text-center text-lg"
-                    />
-                  </div>
                 </div>
+
+                <JobEmojiSelector
+                  value={editJobIcon}
+                  onChange={setEditJobIcon}
+                  label="직업 이모지 아이콘 선택"
+                />
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
@@ -2791,37 +2796,45 @@ export const TeacherAdminView: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {students.map((student) => (
-                <div
-                  key={student.id}
-                  className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${student.avatarColor} flex items-center justify-center text-xl shadow-2xs`}>
-                      {student.avatarEmoji}
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-slate-850">
-                        {student.name} #{student.studentNumber}
-                      </div>
-                      <div
-                        className={`text-xs font-mono font-bold ${
-                          student.points < 0 ? 'text-rose-600' : 'text-amber-700'
-                        }`}
-                      >
-                        {student.points.toLocaleString()} P
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setAdjustUserId(student.id)}
-                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs transition cursor-pointer"
+              {students.map((student) => {
+                const studentJobList = getStudentJobs ? getStudentJobs(student.id) : [];
+                return (
+                  <div
+                    key={student.id}
+                    className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between"
                   >
-                    조정
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${student.avatarColor} flex items-center justify-center text-xl shadow-2xs shrink-0`}>
+                        {student.avatarEmoji}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-slate-850 truncate">
+                          {student.name} #{student.studentNumber}
+                        </div>
+                        <div
+                          className={`text-xs font-mono font-bold ${
+                            student.points < 0 ? 'text-rose-600' : 'text-amber-700'
+                          }`}
+                        >
+                          {student.points.toLocaleString()} P
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                          {studentJobList.length === 0
+                            ? '현재 무직'
+                            : studentJobList.map((j) => `${j.icon} ${j.title}`).join(', ')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setAdjustUserId(student.id)}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-2xs transition cursor-pointer shrink-0 ml-2"
+                    >
+                      조정
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -2960,56 +2973,306 @@ export const TeacherAdminView: React.FC = () => {
           {/* Supabase SQL Helper Modal */}
           {showSqlGuideModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-              <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+              <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-lg">
                       ⚡
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-base text-slate-850">Supabase DB 테이블 스키마</h3>
-                      <p className="text-xs text-slate-500">수파베이스의 SQL Editor에 붙여넣어 실행하면 통장 로그가 영구 저장됩니다.</p>
+                      <h3 className="font-extrabold text-base text-slate-850">Supabase DB 테이블 스키마 SQL 가이드</h3>
+                      <p className="text-xs text-slate-500">수파베이스의 SQL Editor에 붙여넣어 실행하면 데이터가 실시간 영구 보존됩니다.</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowSqlGuideModal(false)}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
                   >
                     ✕
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  <p className="text-xs text-slate-600">
-                    아래 SQL 스크립트를 복사하여 Supabase 대시보드의 <strong>SQL Editor</strong>에서 <strong>Run</strong> 버튼을 눌러 실행해주세요. (전자 통장 거래 내역 및 1인 1역 직업이 영구 저장됩니다)
+                {/* Safety Notice Banner */}
+                <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200/80 text-xs text-sky-900 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-sky-800">
+                    <span>💡</span>
+                    <span>이미 앞서 몇 개 테이블을 생성하셨어도 안심하세요!</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-sky-700">
+                    모든 SQL에 <code>CREATE TABLE IF NOT EXISTS</code> 및 <code>DROP POLICY IF EXISTS</code> 안전 처리가 되어 있어, 
+                    <strong>전체 스크립트를 다시 실행하셔도 기존 데이터가 삭제되지 않고 안전하게 통과/추가</strong>됩니다.
+                    또는 아래 탭에서 <strong>[상점 & 특권 경매]</strong>만 선택하여 이번에 추가된 4개 테이블만 깔끔하게 복사해 실행하셔도 됩니다!
                   </p>
-                  <pre className="p-3.5 rounded-xl bg-slate-900 text-emerald-400 text-[11px] font-mono overflow-x-auto leading-relaxed select-all">
-{`-- 1. 전자 통장 포인트 거래 내역 테이블 생성
-CREATE TABLE IF NOT EXISTS public.point_transactions (
+                </div>
+
+                {/* Category Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-100 text-xs font-bold">
+                  <button
+                    onClick={() => setSqlModalTab('quests')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'quests'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>📝 퀘스트 & 할일 (quests, logs 2개)</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${sqlModalTab === 'quests' ? 'bg-amber-800 text-amber-100' : 'bg-amber-100 text-amber-700'}`}>신규</span>
+                  </button>
+                  <button
+                    onClick={() => setSqlModalTab('shop_auction')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'shop_auction'
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>🏪 상점 & 특권 경매 (4개)</span>
+                  </button>
+                  <button
+                    onClick={() => setSqlModalTab('seats')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'seats'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>🪑 자리 배치도 & 부동산 (seats)</span>
+                  </button>
+                  <button
+                    onClick={() => setSqlModalTab('jobs')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'jobs'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>💼 1인 1역 직업 (jobs)</span>
+                  </button>
+                  <button
+                    onClick={() => setSqlModalTab('transactions')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'transactions'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>💳 전자 통장 (point_transactions)</span>
+                  </button>
+                  <button
+                    onClick={() => setSqlModalTab('all')}
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                      sqlModalTab === 'all'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>📦 전체 테이블 통합 (총 9개)</span>
+                  </button>
+                </div>
+
+                {/* SQL Code Preview Area */}
+                <div className="flex-1 overflow-y-auto space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+                    <span>
+                      {sqlModalTab === 'quests' && '📝 퀘스트 목록 및 학생 제출/심사 로그 테이블 (2개)'}
+                      {sqlModalTab === 'shop_auction' && '🏪 상점 상품, 주문 내역, 특권 경매, 입찰 기록 테이블 (4개)'}
+                      {sqlModalTab === 'seats' && '🪑 교실 자리 배치도 및 부동산 테이블 (1개)'}
+                      {sqlModalTab === 'jobs' && '💼 1인 1역 직업 목록 테이블 (1개)'}
+                      {sqlModalTab === 'transactions' && '💳 전자 통장 포인트 거래 기록 테이블 (1개)'}
+                      {sqlModalTab === 'all' && '📦 학급 화폐 및 퀘스트/상점/경매 시스템 전체 테이블 통합 스크립트 (총 9개 테이블)'}
+                    </span>
+                    <span className="text-[11px] text-slate-400">클릭 후 복사하여 Supabase SQL Editor에 실행</span>
+                  </div>
+
+                  <pre className="p-4 rounded-2xl bg-slate-900 text-emerald-400 text-[11px] font-mono overflow-x-auto leading-relaxed select-all border border-slate-800 shadow-inner">
+{sqlModalTab === 'quests' ? `-- ==========================================================
+-- 📝 [신규] 퀘스트 & 할일 관리 (quests, quest_logs) 테이블 생성 SQL
+-- ==========================================================
+
+-- 1. 학급 퀘스트 목록 (quests) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quests (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    balance_after NUMERIC NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reward NUMERIC NOT NULL DEFAULT 100,
+    quest_type TEXT NOT NULL DEFAULT 'homework',
+    icon TEXT NOT NULL DEFAULT '📝',
+    target_type TEXT NOT NULL DEFAULT 'all',
+    target_job_id TEXT,
+    target_student_ids TEXT[],
+    frequency_type TEXT NOT NULL DEFAULT 'daily',
+    due_date TEXT,
+    recurring_days NUMERIC[],
+    stat_reward_type TEXT DEFAULT 'diligence',
+    stat_reward_amount NUMERIC DEFAULT 1,
+    is_archived BOOLEAN NOT NULL DEFAULT false,
+    archived_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 인덱스 생성 (조회 속도 최적화)
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
 
--- RLS (Row Level Security) 설정
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
+        CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
 
-CREATE POLICY "Allow public read-write for point transactions"
-ON public.point_transactions
-FOR ALL
-TO anon, authenticated
-USING (true)
-WITH CHECK (true);
+-- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quest_logs (
+    id TEXT PRIMARY KEY,
+    quest_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    student_memo TEXT,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,
+    reject_reason TEXT,
+    is_paid BOOLEAN NOT NULL DEFAULT false
+);
 
--- 2. 1인 1역 직업 목록 테이블 생성
+CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
+
+ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
+        CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;` : sqlModalTab === 'shop_auction' ? `-- ==========================================================
+-- [신규] 상점 상품 & 주문, 특권 경매 & 입찰 테이블 4종 생성 SQL
+-- ==========================================================
+
+-- 1. 학급 상점 상품 (shop_items) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price NUMERIC NOT NULL DEFAULT 100,
+    stock NUMERIC NOT NULL DEFAULT 10,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    icon TEXT NOT NULL DEFAULT '🎟️',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
+        CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    paid_price NUMERIC NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT true,
+    purchased_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
+ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
+        CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 3. 학급 특권 경매 (auctions) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auctions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '🎁',
+    start_price NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bidder_id TEXT,
+    min_bid_step NUMERIC NOT NULL DEFAULT 50,
+    ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ongoing',
+    winner_id TEXT,
+    winning_price NUMERIC,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
+        CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auction_bids (
+    id TEXT PRIMARY KEY,
+    auction_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    bid_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
+CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
+ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
+        CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;` : sqlModalTab === 'seats' ? `-- ==========================================================
+-- 교실 자리 배치도 & 부동산 (seats) 테이블 생성 SQL
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.seats (
+    id TEXT PRIMARY KEY,
+    seat_number NUMERIC NOT NULL DEFAULT 0,
+    row_idx NUMERIC NOT NULL DEFAULT 1,
+    col_idx NUMERIC NOT NULL DEFAULT 1,
+    owner_id TEXT,
+    current_occupant_id TEXT,
+    rental_fee NUMERIC NOT NULL DEFAULT 50,
+    purchase_price NUMERIC NOT NULL DEFAULT 600,
+    is_for_sale BOOLEAN NOT NULL DEFAULT false,
+    sale_price NUMERIC NOT NULL DEFAULT 0,
+    zone TEXT NOT NULL DEFAULT 'middle',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
+CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
+
+ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
+        CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;` : sqlModalTab === 'jobs' ? `-- ==========================================================
+-- 1인 1역 직업 목록 (jobs) 테이블 생성 SQL
+-- ==========================================================
 CREATE TABLE IF NOT EXISTS public.jobs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -3023,38 +3286,384 @@ CREATE TABLE IF NOT EXISTS public.jobs (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- RLS (Row Level Security) 설정
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read-write for jobs"
-ON public.jobs
-FOR ALL
-TO anon, authenticated
-USING (true)
-WITH CHECK (true);`}
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
+        CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;` : sqlModalTab === 'transactions' ? `-- ==========================================================
+-- 전자 통장 거래 내역 (point_transactions) 테이블 생성 SQL
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+
+ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
+        CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;` : `-- ==========================================================
+-- [전체 통합] 학급 화폐 및 경제 시스템 Supabase 7종 테이블 SQL
+-- ==========================================================
+
+-- 1. 전자 통장 포인트 거래 내역
+CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
+        CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 2. 1인 1역 직업 목록
+CREATE TABLE IF NOT EXISTS public.jobs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    weekly_salary NUMERIC NOT NULL DEFAULT 500,
+    difficulty NUMERIC NOT NULL DEFAULT 2,
+    max_count NUMERIC NOT NULL DEFAULT 2,
+    icon TEXT NOT NULL DEFAULT '💼',
+    category TEXT NOT NULL DEFAULT 'service',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
+        CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 3. 학급 자리 배치도 & 부동산
+CREATE TABLE IF NOT EXISTS public.seats (
+    id TEXT PRIMARY KEY,
+    seat_number NUMERIC NOT NULL DEFAULT 0,
+    row_idx NUMERIC NOT NULL DEFAULT 1,
+    col_idx NUMERIC NOT NULL DEFAULT 1,
+    owner_id TEXT,
+    current_occupant_id TEXT,
+    rental_fee NUMERIC NOT NULL DEFAULT 50,
+    purchase_price NUMERIC NOT NULL DEFAULT 600,
+    is_for_sale BOOLEAN NOT NULL DEFAULT false,
+    sale_price NUMERIC NOT NULL DEFAULT 0,
+    zone TEXT NOT NULL DEFAULT 'middle',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
+CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
+ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
+        CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 4. 학급 상점 상품
+CREATE TABLE IF NOT EXISTS public.shop_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price NUMERIC NOT NULL DEFAULT 100,
+    stock NUMERIC NOT NULL DEFAULT 10,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    icon TEXT NOT NULL DEFAULT '🎟️',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
+        CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 5. 학급 상점 주문 내역
+CREATE TABLE IF NOT EXISTS public.shop_orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    paid_price NUMERIC NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT true,
+    purchased_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
+ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
+        CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 6. 학급 특권 경매
+CREATE TABLE IF NOT EXISTS public.auctions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '🎁',
+    start_price NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bidder_id TEXT,
+    min_bid_step NUMERIC NOT NULL DEFAULT 50,
+    ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ongoing',
+    winner_id TEXT,
+    winning_price NUMERIC,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
+        CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- 8. 학급 퀘스트 목록
+CREATE TABLE IF NOT EXISTS public.quests (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reward NUMERIC NOT NULL DEFAULT 100,
+    quest_type TEXT NOT NULL DEFAULT 'homework',
+    icon TEXT NOT NULL DEFAULT '📝',
+    target_type TEXT NOT NULL DEFAULT 'all',
+    target_job_id TEXT,
+    target_student_ids TEXT[],
+    frequency_type TEXT NOT NULL DEFAULT 'daily',
+    due_date TEXT,
+    recurring_days NUMERIC[],
+    stat_reward_type TEXT DEFAULT 'diligence',
+    stat_reward_amount NUMERIC DEFAULT 1,
+    is_archived BOOLEAN NOT NULL DEFAULT false,
+    archived_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
+    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 9. 퀘스트 제출 및 심사 로그
+CREATE TABLE IF NOT EXISTS public.quest_logs (
+    id TEXT PRIMARY KEY,
+    quest_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    student_memo TEXT,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,
+    reject_reason TEXT,
+    is_paid BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
+ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
+    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`}
                   </pre>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`-- 1. 전자 통장 포인트 거래 내역 테이블 생성
-CREATE TABLE IF NOT EXISTS public.point_transactions (
+                {/* Modal Footer Actions */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                  <div className="text-xs text-slate-500 font-medium">
+                    {sqlModalTab === 'quests' ? '📝 퀘스트 & 할일 2개 테이블' : sqlModalTab === 'shop_auction' ? '🏪 상점&경매 4개 테이블' : sqlModalTab === 'all' ? '📦 전체 9개 테이블' : '선택된 단일 테이블'}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Copy Current Tab Button */}
+                    <button
+                      onClick={() => {
+                        const questsSql = `-- 1. 학급 퀘스트 목록 (quests) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quests (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reward NUMERIC NOT NULL DEFAULT 100,
+    quest_type TEXT NOT NULL DEFAULT 'homework',
+    icon TEXT NOT NULL DEFAULT '📝',
+    target_type TEXT NOT NULL DEFAULT 'all',
+    target_job_id TEXT,
+    target_student_ids TEXT[],
+    frequency_type TEXT NOT NULL DEFAULT 'daily',
+    due_date TEXT,
+    recurring_days NUMERIC[],
+    stat_reward_type TEXT DEFAULT 'diligence',
+    stat_reward_amount NUMERIC DEFAULT 1,
+    is_archived BOOLEAN NOT NULL DEFAULT false,
+    archived_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
+    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quest_logs (
+    id TEXT PRIMARY KEY,
+    quest_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    student_memo TEXT,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,
+    reject_reason TEXT,
+    is_paid BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
+ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
+    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+
+                        const shopAuctionSql = `-- 1. 학급 상점 상품 (shop_items) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price NUMERIC NOT NULL DEFAULT 100,
+    stock NUMERIC NOT NULL DEFAULT 10,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    icon TEXT NOT NULL DEFAULT '🎟️',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
+    CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_orders (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    amount NUMERIC NOT NULL,
-    balance_after NUMERIC NOT NULL,
-    category TEXT NOT NULL,
-    description TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
+    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    paid_price NUMERIC NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT true,
+    purchased_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
+ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
+    CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
 
--- 2. 1인 1역 직업 목록 테이블 생성
-CREATE TABLE IF NOT EXISTS public.jobs (
+-- 3. 학급 특권 경매 (auctions) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auctions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '🎁',
+    start_price NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bidder_id TEXT,
+    min_bid_step NUMERIC NOT NULL DEFAULT 50,
+    ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ongoing',
+    winner_id TEXT,
+    winning_price NUMERIC,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
+    CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auction_bids (
+    id TEXT PRIMARY KEY,
+    auction_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    bid_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
+CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
+ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
+    CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+
+                        const seatsSql = `CREATE TABLE IF NOT EXISTS public.seats (
+    id TEXT PRIMARY KEY,
+    seat_number NUMERIC NOT NULL DEFAULT 0,
+    row_idx NUMERIC NOT NULL DEFAULT 1,
+    col_idx NUMERIC NOT NULL DEFAULT 1,
+    owner_id TEXT,
+    current_occupant_id TEXT,
+    rental_fee NUMERIC NOT NULL DEFAULT 50,
+    purchase_price NUMERIC NOT NULL DEFAULT 600,
+    is_for_sale BOOLEAN NOT NULL DEFAULT false,
+    sale_price NUMERIC NOT NULL DEFAULT 0,
+    zone TEXT NOT NULL DEFAULT 'middle',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_seats_owner ON public.seats(owner_id);
+CREATE INDEX IF NOT EXISTS idx_seats_occupant ON public.seats(current_occupant_id);
+ALTER TABLE public.seats ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'seats' AND policyname = 'Allow public read-write for seats') THEN
+    CREATE POLICY "Allow public read-write for seats" ON public.seats FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+
+                        const jobsSql = `CREATE TABLE IF NOT EXISTS public.jobs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
@@ -3067,19 +3676,201 @@ CREATE TABLE IF NOT EXISTS public.jobs (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);`);
-                      showToast('SQL 스크립트가 클립보드에 복사되었습니다!');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>📋 SQL 복사하기</span>
-                  </button>
-                  <button
-                    onClick={() => setShowSqlGuideModal(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
-                  >
-                    닫기
-                  </button>
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'jobs' AND policyname = 'Allow public read-write for jobs') THEN
+    CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+
+                        const transSql = `CREATE TABLE IF NOT EXISTS public.point_transactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_point_transactions_created_at ON public.point_transactions(created_at DESC);
+ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'point_transactions' AND policyname = 'Allow public read-write for point transactions') THEN
+    CREATE POLICY "Allow public read-write for point transactions" ON public.point_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+
+                        const allSql = `${transSql}\n\n${jobsSql}\n\n${seatsSql}\n\n${shopAuctionSql}\n\n${questsSql}`;
+
+                        const copyText = 
+                          sqlModalTab === 'quests' ? questsSql :
+                          sqlModalTab === 'shop_auction' ? shopAuctionSql :
+                          sqlModalTab === 'seats' ? seatsSql :
+                          sqlModalTab === 'jobs' ? jobsSql :
+                          sqlModalTab === 'transactions' ? transSql : allSql;
+
+                        navigator.clipboard.writeText(copyText);
+                        showToast(
+                          sqlModalTab === 'quests'
+                            ? '📝 퀘스트 & 할일 관리 전용 SQL(2개 테이블)이 복사되었습니다!'
+                            : sqlModalTab === 'shop_auction' 
+                            ? '🏪 상점 & 특권 경매 전용 SQL(4개 테이블)이 복사되었습니다!'
+                            : `${sqlModalTab === 'all' ? '전체 통합' : '선택된'} SQL이 클립보드에 복사되었습니다!`
+                        );
+                      }}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>📋 {sqlModalTab === 'quests' ? '퀘스트 SQL만 복사' : sqlModalTab === 'shop_auction' ? '상점 & 경매 SQL만 복사' : sqlModalTab === 'all' ? '전체 SQL 복사' : '선택한 탭 SQL 복사'}</span>
+                    </button>
+
+                    {/* Quick Copy Quests */}
+                    {sqlModalTab !== 'quests' && (
+                      <button
+                        onClick={() => {
+                          const questsSql = `-- 1. 학급 퀘스트 목록 (quests) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quests (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reward NUMERIC NOT NULL DEFAULT 100,
+    quest_type TEXT NOT NULL DEFAULT 'homework',
+    icon TEXT NOT NULL DEFAULT '📝',
+    target_type TEXT NOT NULL DEFAULT 'all',
+    target_job_id TEXT,
+    target_student_ids TEXT[],
+    frequency_type TEXT NOT NULL DEFAULT 'daily',
+    due_date TEXT,
+    recurring_days NUMERIC[],
+    stat_reward_type TEXT DEFAULT 'diligence',
+    stat_reward_amount NUMERIC DEFAULT 1,
+    is_archived BOOLEAN NOT NULL DEFAULT false,
+    archived_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.quests ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quests' AND policyname = 'Allow public read-write for quests') THEN
+    CREATE POLICY "Allow public read-write for quests" ON public.quests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 2. 퀘스트 제출 및 심사 로그 (quest_logs) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.quest_logs (
+    id TEXT PRIMARY KEY,
+    quest_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    student_memo TEXT,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,
+    reject_reason TEXT,
+    is_paid BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_user_id ON public.quest_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_quest_id ON public.quest_logs(quest_id);
+CREATE INDEX IF NOT EXISTS idx_quest_logs_target_date ON public.quest_logs(target_date);
+ALTER TABLE public.quest_logs ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'quest_logs' AND policyname = 'Allow public read-write for quest_logs') THEN
+    CREATE POLICY "Allow public read-write for quest_logs" ON public.quest_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+                          navigator.clipboard.writeText(questsSql);
+                          showToast('📝 퀘스트 & 할일 전용 SQL(2개 테이블)이 복사되었습니다!');
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>📝 퀘스트만 복사</span>
+                      </button>
+                    )}
+
+                    {/* Quick Copy Shop & Auctions */}
+                    {sqlModalTab !== 'shop_auction' && (
+                      <button
+                        onClick={() => {
+                          const shopAuctionSql = `-- 1. 학급 상점 상품 (shop_items) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price NUMERIC NOT NULL DEFAULT 100,
+    stock NUMERIC NOT NULL DEFAULT 10,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    icon TEXT NOT NULL DEFAULT '🎟️',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.shop_items ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_items' AND policyname = 'Allow public read-write for shop_items') THEN
+    CREATE POLICY "Allow public read-write for shop_items" ON public.shop_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 2. 학급 상점 주문 내역 (shop_orders) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.shop_orders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    paid_price NUMERIC NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT true,
+    purchased_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_orders_user_id ON public.shop_orders(user_id);
+ALTER TABLE public.shop_orders ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'shop_orders' AND policyname = 'Allow public read-write for shop_orders') THEN
+    CREATE POLICY "Allow public read-write for shop_orders" ON public.shop_orders FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 3. 학급 특권 경매 (auctions) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auctions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '🎁',
+    start_price NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bid NUMERIC NOT NULL DEFAULT 100,
+    current_highest_bidder_id TEXT,
+    min_bid_step NUMERIC NOT NULL DEFAULT 50,
+    ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ongoing',
+    winner_id TEXT,
+    winning_price NUMERIC,
+    category TEXT NOT NULL DEFAULT 'privilege',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.auctions ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auctions' AND policyname = 'Allow public read-write for auctions') THEN
+    CREATE POLICY "Allow public read-write for auctions" ON public.auctions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;
+
+-- 4. 경매 입찰 기록 (auction_bids) 테이블 생성
+CREATE TABLE IF NOT EXISTS public.auction_bids (
+    id TEXT PRIMARY KEY,
+    auction_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    bid_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_auction_bids_auction ON public.auction_bids(auction_id);
+CREATE INDEX IF NOT EXISTS idx_auction_bids_user ON public.auction_bids(user_id);
+ALTER TABLE public.auction_bids ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'auction_bids' AND policyname = 'Allow public read-write for auction_bids') THEN
+    CREATE POLICY "Allow public read-write for auction_bids" ON public.auction_bids FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+END IF; END $$;`;
+                          navigator.clipboard.writeText(shopAuctionSql);
+                          showToast('🏪 상점 & 특권 경매 전용 SQL(4개 테이블)이 복사되었습니다!');
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>🏪 상점&경매만 복사</span>
+                      </button>
+                    )}
+
+                    {/* Close Button */}
+                    <button
+                      onClick={() => setShowSqlGuideModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      닫기
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3092,9 +3883,15 @@ CREATE POLICY "Allow public read-write for jobs" ON public.jobs FOR ALL TO anon,
         <div className="space-y-6">
           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Gavel className="w-5 h-5 text-amber-600" />
                 <h3 className="font-bold text-base text-slate-850">학급 특권 경매 등록 및 통제</h3>
+                {isSupabaseConfigured && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                    <Database className="w-3 h-3 text-emerald-600" />
+                    Supabase DB 연동 활성
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 선생님과의 1:1 점심 식사, 독점 DJ 선곡권, 자리 자유 선택권 등 학생들의 학습 동기를 자극하는 희귀 특권을 경매로 등록합니다.

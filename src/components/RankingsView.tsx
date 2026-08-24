@@ -17,7 +17,7 @@ import { StatKey } from '../types';
 import { getTotalExp, getRankInfo } from '../utils/rankUtils';
 
 export const RankingsView: React.FC = () => {
-  const { users, stats, titles, getStudentJob } = useApp();
+  const { users, stats, titles, getStudentJob, getStudentJobs } = useApp();
   const [rankingType, setRankingType] = useState<'wealth' | StatKey>('wealth');
 
   const students = users.filter((u) => u.role === 'student');
@@ -283,7 +283,7 @@ export const RankingsView: React.FC = () => {
         {/* Detailed Full List */}
         <div className="space-y-2 pt-2">
           {sortedStudents.map((student, idx) => {
-            const job = getStudentJob(student.id);
+            const studentJobList = getStudentJobs ? getStudentJobs(student.id) : [];
             const title = titles.find((t) => t.id === student.mainTitleId);
             const statVal =
               rankingType === 'wealth' ? student.points : stats[student.id]?.[rankingType] || 0;
@@ -324,7 +324,9 @@ export const RankingsView: React.FC = () => {
                       )}
                     </div>
                     <div className="text-xs text-slate-500 truncate mt-0.5">
-                      {job ? `${job.icon} ${job.title}` : '직업 미배정'}
+                      {studentJobList.length === 0
+                        ? '현재 무직'
+                        : studentJobList.map((j) => `${j.icon} ${j.title}`).join(' · ')}
                     </div>
                   </div>
                 </div>

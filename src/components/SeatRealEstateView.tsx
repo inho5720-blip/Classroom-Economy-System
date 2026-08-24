@@ -13,9 +13,11 @@ import {
   X,
   Sliders,
   Settings,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Seat } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const SeatRealEstateView: React.FC = () => {
   const {
@@ -112,6 +114,12 @@ export const SeatRealEstateView: React.FC = () => {
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold">
                 교실 실시간 거래소
               </span>
+              {isSupabaseConfigured && (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-bold">
+                  <Database className="w-3 h-3 text-sky-600" />
+                  Supabase DB 동기화
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               내 자리를 교사에게 자가로 분양받아 매주 자리세를 면제받거나, 친구들과 당근마켓에서 자유롭게 거래하세요.

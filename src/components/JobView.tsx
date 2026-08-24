@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Job, JobApplication } from '../types';
+import { JobEmojiSelector } from './JobEmojiSelector';
 
 interface JobViewProps {
   onNavigateToAdmin?: () => void;
@@ -48,10 +49,14 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
   } = useApp();
 
   const isTeacher = currentUser.role === 'teacher';
-  const currentStudentJob = !isTeacher ? jobs.find((j) => {
-    const sj = studentJobs.find((s) => s.userId === currentUser.id && s.isActive);
-    return sj && sj.jobId === j.id;
-  }) : undefined;
+  const currentStudentJobs = !isTeacher
+    ? jobs.filter((j) => {
+        const sjList = studentJobs.filter((s) => s.userId === currentUser.id && s.isActive);
+        return sjList.some((s) => s.jobId === j.id);
+      })
+    : [];
+
+  const totalWeeklySalary = currentStudentJobs.reduce((sum, j) => sum + (j.weeklySalary || 0), 0);
 
   const [activeSubTab, setActiveSubTab] = useState<'directory' | 'my_applications' | 'pending_reviews'>('directory');
   const [teacherReviewInboxTab, setTeacherReviewInboxTab] = useState<'pending' | 'completed'>('pending');
@@ -347,30 +352,56 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
                 <span>나의 1인 1역 학급 직업 센터</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                {currentStudentJob ? (
+                {currentStudentJobs.length === 0 ? (
+                  <span>현재 무직 상태입니다</span>
+                ) : currentStudentJobs.length === 1 ? (
                   <span className="flex items-center gap-2.5 flex-wrap">
                     <span>현재 직업:</span>
                     <span className="text-amber-300 flex items-center gap-1.5">
-                      <span>{currentStudentJob.icon}</span>
-                      <span>{currentStudentJob.title}</span>
+                      <span>{currentStudentJobs[0].icon}</span>
+                      <span>{currentStudentJobs[0].title}</span>
                     </span>
                   </span>
                 ) : (
-                  <span>현재 배정된 직업이 없습니다</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                    <span>현재 직업 ({currentStudentJobs.length}개 복수 수행 중):</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {currentStudentJobs.map((job) => (
+                        <span
+                          key={job.id}
+                          className="px-2.5 py-1 rounded-xl bg-white/15 border border-white/20 text-amber-300 font-bold text-xs sm:text-sm flex items-center gap-1"
+                        >
+                          <span>{job.icon}</span>
+                          <span>{job.title}</span>
+                          <span className="text-[11px] text-amber-200/90 font-mono font-medium">
+                            +{job.weeklySalary}P
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </h2>
               <p className="text-xs sm:text-sm text-indigo-200/90 max-w-xl leading-relaxed">
-                {currentStudentJob ? (
+                {currentStudentJobs.length === 0 ? (
                   <span>
-                    {currentStudentJob.description} (매주 주급 정산 시{' '}
+                    현재 맡은 직업이 없습니다. 원하는 학급 직업에 지원서를 작성하거나, 우리 반에 꼭 필요한 새로운 직업을 직접 제안해 보세요!
+                  </span>
+                ) : currentStudentJobs.length === 1 ? (
+                  <span>
+                    {currentStudentJobs[0].description} (매주 주급 정산 시{' '}
                     <strong className="text-amber-300 font-mono font-bold">
-                      +{currentStudentJob.weeklySalary}P
+                      +{currentStudentJobs[0].weeklySalary.toLocaleString()}P
                     </strong>{' '}
                     기본 지급)
                   </span>
                 ) : (
                   <span>
-                    원하는 학급 직업에 지원서를 작성하거나, 우리 반에 꼭 필요한 새로운 직업을 직접 제안해 보세요!
+                    현재 {currentStudentJobs.map((j) => j.title).join(', ')} 역할을 동시에 충실히 수행하고 있습니다. (매주 주급 정산 시 합산 총{' '}
+                    <strong className="text-amber-300 font-mono font-bold">
+                      +{totalWeeklySalary.toLocaleString()}P
+                    </strong>{' '}
+                    지급)
                   </span>
                 )}
               </p>
@@ -660,9 +691,9 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
                               <span>{st?.name}</span>
                               {isTeacher && (
                                 <button
-                                  onClick={() => st && unassignStudentJob(st.id)}
-                                  className="ml-1 text-slate-400 hover:text-rose-600"
-                                  title="배정 해제"
+                                  onClick={() => st && unassignStudentJob(st.id, job.id)}
+                                  className="ml-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  title="이 직업 배정 해제"
                                 >
                                   ×
                                 </button>
@@ -700,18 +731,23 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
                             }
                           }}
                           defaultValue=""
-                          className="w-full px-2.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700 font-bold"
+                          className="w-full px-2.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700 font-bold cursor-pointer"
                         >
                           <option value="" disabled>
                             ➕ 학생 직접 배정...
                           </option>
                           {users
                             .filter((u) => u.role === 'student')
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.studentNumber || '학생'})
-                              </option>
-                            ))}
+                            .map((u) => {
+                              const stJobs = studentJobs.filter((sj) => sj.userId === u.id && sj.isActive);
+                              const alreadyHasThisJob = stJobs.some((sj) => sj.jobId === job.id);
+                              const count = stJobs.length;
+                              return (
+                                <option key={u.id} value={u.id} disabled={alreadyHasThisJob}>
+                                  {u.name} ({u.studentNumber || '학생'}) - {alreadyHasThisJob ? '이미 담당 중' : count === 0 ? '현재 무직' : `${count}개 직업 보유`}
+                                </option>
+                              );
+                            })}
                         </select>
                       </div>
                     )}
@@ -1242,32 +1278,22 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
                     <span>우리 반을 위한 새로운 1인 1역 제안하기</span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">제안할 직업명</label>
-                      <input
-                        type="text"
-                        placeholder="예: 생일 축하 DJ, 학급 보드게임 지킴이"
-                        value={customTitle}
-                        onChange={(e) => setCustomTitle(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">대표 아이콘</label>
-                      <select
-                        value={customIcon}
-                        onChange={(e) => setCustomIcon(e.target.value)}
-                        className="w-full px-2 py-2 rounded-xl bg-white border border-slate-200 text-xs text-center font-bold"
-                      >
-                        {['🌟', '🎵', '🎲', '📸', '🎨', '🏆', '📢', '🌿', '🥛', '🧹', '🛡️', '📦', '💻', '🎬'].map((emoji) => (
-                          <option key={emoji} value={emoji}>
-                            {emoji}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">제안할 직업명</label>
+                    <input
+                      type="text"
+                      placeholder="예: 생일 축하 DJ, 학급 보드게임 지킴이"
+                      value={customTitle}
+                      onChange={(e) => setCustomTitle(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 font-bold"
+                    />
                   </div>
+
+                  <JobEmojiSelector
+                    value={customIcon}
+                    onChange={setCustomIcon}
+                    label="대표 직업 이모지 선택"
+                  />
 
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">어떤 역할을 수행하나요? (업무 설명)</label>
@@ -1488,31 +1514,26 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">아이콘 이모지</label>
-                <input
-                  type="text"
-                  value={newJobIcon}
-                  onChange={(e) => setNewJobIcon(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">카테고리</label>
-                <select
-                  value={newJobCategory}
-                  onChange={(e) => setNewJobCategory(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
-                >
-                  <option value="service">🤝 봉사 & 복지</option>
-                  <option value="cleaning">🧹 청소 & 환경</option>
-                  <option value="learning">📚 학습 & 독서</option>
-                  <option value="order">📢 질서 & 알림</option>
-                  <option value="environment">🌿 생태 & 식물</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">카테고리</label>
+              <select
+                value={newJobCategory}
+                onChange={(e) => setNewJobCategory(e.target.value as any)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+              >
+                <option value="service">🤝 봉사 & 복지</option>
+                <option value="cleaning">🧹 청소 & 환경</option>
+                <option value="learning">📚 학습 & 독서</option>
+                <option value="order">📢 질서 & 알림</option>
+                <option value="environment">🌿 생태 & 식물</option>
+              </select>
             </div>
+
+            <JobEmojiSelector
+              value={newJobIcon}
+              onChange={setNewJobIcon}
+              label="직업 이모지 아이콘 선택"
+            />
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
@@ -1620,7 +1641,7 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">주급 (P)</label>
                 <input
@@ -1643,16 +1664,13 @@ export const JobView: React.FC<JobViewProps> = ({ onNavigateToAdmin }) => {
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">아이콘 이모지</label>
-                <input
-                  type="text"
-                  value={editJobIcon}
-                  onChange={(e) => setEditJobIcon(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-center"
-                />
-              </div>
             </div>
+
+            <JobEmojiSelector
+              value={editJobIcon}
+              onChange={setEditJobIcon}
+              label="직업 이모지 아이콘 선택"
+            />
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button

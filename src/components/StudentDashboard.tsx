@@ -50,6 +50,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
     pointLedger,
     triggerCelebration,
     taxSettings,
+    getStudentJobs,
   } = useApp();
 
   const [isTitleModalOpen, setIsTitleModalOpen] = useState(false);
@@ -66,7 +67,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
     credit: 10,
   };
 
-  const job = getStudentJob(currentUser.id);
+  const userJobs = getStudentJobs ? getStudentJobs(currentUser.id) : [];
+  const userJobIds = userJobs.map((j) => j.id);
+  const totalWeeklyJobSalary = userJobs.reduce((sum, j) => sum + (j.weeklySalary || 0), 0);
   const mainTitle = titles.find((t) => t.id === currentUser.mainTitleId);
 
   // Total stat EXP & Rank calculations
@@ -87,7 +90,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
       todayStr,
       currentUser.id,
       questLogs,
-      currentUser.jobId || job?.id,
+      userJobIds,
       currentUser.role === 'teacher'
     )
   );
@@ -873,35 +876,51 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <Briefcase className="w-4 h-4 text-amber-600" />
-                <h3 className="font-bold text-sm text-slate-800">내 1인 1역 직업</h3>
+                <h3 className="font-bold text-sm text-slate-800">
+                  내 1인 1역 직업 {userJobs.length > 1 && `(${userJobs.length}개)`}
+                </h3>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                 주급 보장제
               </span>
             </div>
 
-            {job ? (
+            {userJobs.length === 0 ? (
+              <div className="text-center py-5 space-y-2">
+                <p className="text-xs text-slate-600 font-bold">현재 무직 상태입니다.</p>
+                <p className="text-[11px] text-slate-400">1인 1역 직업에 지원하여 매주 정기 주급을 획득하세요!</p>
+                <button
+                  onClick={() => onNavigateTab('jobs')}
+                  className="mt-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>직업 공고 확인 & 지원서 작성</span>
+                </button>
+              </div>
+            ) : userJobs.length === 1 ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
-                    {job.icon}
+                    {userJobs[0].icon}
                   </div>
                   <div>
-                    <h4 className="font-bold text-base text-slate-850">{job.title}</h4>
-                    <p className="text-xs text-slate-500">{job.description}</p>
+                    <h4 className="font-bold text-base text-slate-850">{userJobs[0].title}</h4>
+                    <p className="text-xs text-slate-500">{userJobs[0].description}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
                     <span className="text-slate-500 text-[11px] block">기본 주급</span>
-                    <strong className="text-amber-700 font-mono font-bold text-sm">{job.weeklySalary} P</strong>
+                    <strong className="text-amber-700 font-mono font-bold text-sm">
+                      {userJobs[0].weeklySalary.toLocaleString()} P
+                    </strong>
                   </div>
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
                     <span className="text-slate-500 text-[11px] block">업무 난이도</span>
                     <div className="text-rose-500 font-bold">
-                      {'★'.repeat(job.difficulty)}
-                      <span className="text-slate-300">{'★'.repeat(5 - job.difficulty)}</span>
+                      {'★'.repeat(userJobs[0].difficulty)}
+                      <span className="text-slate-300">{'★'.repeat(Math.max(0, 5 - userJobs[0].difficulty))}</span>
                     </div>
                   </div>
                 </div>
@@ -911,18 +930,49 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
                   className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>1인 1역 직업 센터 & 지원서 관리 바로가기</span>
+                  <span>1인 1역 직업 센터 & 추가 지원 바로가기</span>
                 </button>
               </div>
             ) : (
-              <div className="text-center py-5 space-y-2">
-                <p className="text-xs text-slate-500">현재 배정된 직업이 없습니다.</p>
+              <div className="space-y-3">
+                {/* Total salary banner for multi-jobs */}
+                <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-indigo-600 font-bold block">총 예상 합산 주급 ({userJobs.length}개 직업)</span>
+                    <span className="text-xs text-indigo-900 font-medium">매주 정산 시 합산 지급</span>
+                  </div>
+                  <strong className="text-amber-700 font-mono font-black text-base">
+                    +{totalWeeklyJobSalary.toLocaleString()} P
+                  </strong>
+                </div>
+
+                {/* List of jobs */}
+                <div className="space-y-2">
+                  {userJobs.map((j) => (
+                    <div
+                      key={j.id}
+                      className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{j.icon}</span>
+                        <div>
+                          <div className="font-bold text-xs text-slate-800">{j.title}</div>
+                          <div className="text-[10px] text-slate-500 line-clamp-1">{j.description}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 font-mono font-bold text-xs text-amber-700">
+                        +{j.weeklySalary.toLocaleString()}P
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <button
                   onClick={() => onNavigateTab('jobs')}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition inline-flex items-center gap-1.5 cursor-pointer"
+                  className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
                 >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>직업 공고 확인 & 지원서 작성</span>
+                  <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>1인 1역 직업 센터 & 추가 지원 바로가기</span>
                 </button>
               </div>
             )}

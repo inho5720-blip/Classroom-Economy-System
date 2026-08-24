@@ -20,9 +20,12 @@ import {
   Users,
   CheckCircle,
   AlertTriangle,
+  Database,
+  CloudCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Seat } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const TeacherSeatManagement: React.FC = () => {
   const {
@@ -174,6 +177,12 @@ export const TeacherSeatManagement: React.FC = () => {
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-indigo-600" />
             <h3 className="font-bold text-sm text-slate-850">교실 자리 배치도 및 기본 세금/분양가 설정</h3>
+            {isSupabaseConfigured && (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                <Database className="w-3 h-3 text-emerald-600" />
+                Supabase DB 실시간 연동 중
+              </span>
+            )}
           </div>
 
           {/* Quick Presets */}

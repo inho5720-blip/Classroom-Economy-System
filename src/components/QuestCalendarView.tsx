@@ -33,6 +33,7 @@ export const QuestCalendarView: React.FC = () => {
     studentJobs,
     submitQuestLog,
     getStudentJob,
+    getStudentJobs,
     triggerCelebration,
   } = useApp();
 
@@ -185,8 +186,8 @@ export const QuestCalendarView: React.FC = () => {
     setSelectedDate(todayStr);
   };
 
-  const studentJob = getStudentJob(currentUser.id);
-  const studentJobId = currentUser.jobId || studentJob?.id;
+  const studentJobList = getStudentJobs ? getStudentJobs(currentUser.id) : [];
+  const studentJobIds = studentJobList.map((j) => j.id);
 
   // Filter quests with date, deadline, completion status, and student targeting support
   const activeDateQuests = useMemo(() => {
@@ -196,11 +197,11 @@ export const QuestCalendarView: React.FC = () => {
         selectedDate,
         currentUser.id,
         questLogs,
-        studentJobId,
+        studentJobIds,
         currentUser.role === 'teacher'
       )
     );
-  }, [quests, selectedDate, currentUser, questLogs, studentJobId]);
+  }, [quests, selectedDate, currentUser, questLogs, studentJobIds]);
 
   const filteredQuests = useMemo(() => {
     return activeDateQuests.filter((q) => {
@@ -514,7 +515,7 @@ export const QuestCalendarView: React.FC = () => {
                     day.date,
                     currentUser.id,
                     questLogs,
-                    studentJobId,
+                    studentJobIds,
                     currentUser.role === 'teacher'
                   )
                 ).length;

@@ -22,9 +22,11 @@ import {
   Edit2,
   Trash2,
   Settings,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ShopItem, AuctionItem } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const ShopView: React.FC = () => {
   const {
@@ -216,7 +218,7 @@ export const ShopView: React.FC = () => {
             {activeTab === 'fixed' ? '🏪' : '👑'}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-black text-slate-850">
                 {activeTab === 'fixed' ? '학급 행복 상점' : '학급 특권 실시간 경매장'}
               </h2>
@@ -229,6 +231,12 @@ export const ShopView: React.FC = () => {
               >
                 {activeTab === 'fixed' ? '고정가 즉시 구매' : '실시간 최고가 경쟁'}
               </span>
+              {isSupabaseConfigured && (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                  <Database className="w-3 h-3 text-emerald-600" />
+                  Supabase DB 동기화 중
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {activeTab === 'fixed'
