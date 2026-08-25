@@ -106,6 +106,15 @@ export interface QuestLog {
   submittedAt: string;
 }
 
+export interface CalendarMemo {
+  id: string;
+  userId: string;
+  targetDate: string; // YYYY-MM-DD
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TaxSetting {
   id: string;
   name: string; // 소득세, 건강보험료, 국세, 자리세 등

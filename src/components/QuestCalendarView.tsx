@@ -19,6 +19,12 @@ import {
   RotateCw,
   Users,
   UserCheck,
+  StickyNote,
+  Edit3,
+  Trash2,
+  Save,
+  PenTool,
+  FileText,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { isQuestActiveForDateAndStudent, getRecurringDaysLabel, getQuestRewardForStudent, getTodayDateStr } from '../utils/questUtils';
@@ -29,6 +35,9 @@ export const QuestCalendarView: React.FC = () => {
     users,
     quests,
     questLogs,
+    calendarMemos,
+    saveCalendarMemo,
+    deleteCalendarMemo,
     jobs,
     studentJobs,
     submitQuestLog,
@@ -53,6 +62,42 @@ export const QuestCalendarView: React.FC = () => {
   const [activeMemoInputQuestId, setActiveMemoInputQuestId] = useState<string | null>(null);
   const [memoInputText, setMemoInputText] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'homework' | 'job'>('all');
+
+  // 날짜별 개인 메모 상태
+  const [dailyMemoText, setDailyMemoText] = useState('');
+  const [isEditingDailyMemo, setIsEditingDailyMemo] = useState(false);
+
+  // 선택된 날짜의 메모 찾기
+  const currentSelectedMemo = useMemo(() => {
+    return calendarMemos.find(
+      (m) => m.userId === currentUser.id && m.targetDate === selectedDate
+    );
+  }, [calendarMemos, currentUser.id, selectedDate]);
+
+  // 날짜가 바뀔 때 메모 인풋 동기화
+  useEffect(() => {
+    if (currentSelectedMemo) {
+      setDailyMemoText(currentSelectedMemo.content);
+      setIsEditingDailyMemo(false);
+    } else {
+      setDailyMemoText('');
+      setIsEditingDailyMemo(false);
+    }
+  }, [selectedDate, currentSelectedMemo]);
+
+  const handleSaveDailyMemo = () => {
+    if (!dailyMemoText.trim()) return;
+    saveCalendarMemo(selectedDate, dailyMemoText.trim(), currentSelectedMemo?.id);
+    setIsEditingDailyMemo(false);
+  };
+
+  const handleDeleteDailyMemo = () => {
+    if (currentSelectedMemo) {
+      deleteCalendarMemo(currentSelectedMemo.id);
+      setDailyMemoText('');
+      setIsEditingDailyMemo(false);
+    }
+  };
 
   // Generate calendar days for the current year & month
   const { monthDays, weeksList } = useMemo(() => {
@@ -433,6 +478,9 @@ export const QuestCalendarView: React.FC = () => {
                 );
                 const approvedCount = dayLogs.filter((l) => l.status === 'approved').length;
                 const pendingCount = dayLogs.filter((l) => l.status === 'pending').length;
+                const dayMemo = calendarMemos.find(
+                  (m) => m.userId === currentUser.id && m.targetDate === day.date
+                );
 
                 return (
                   <button
@@ -441,7 +489,7 @@ export const QuestCalendarView: React.FC = () => {
                       setSelectedDate(day.date);
                       setSelectedWeekIndex(day.weekIndex);
                     }}
-                    className={`min-h-[72px] sm:min-h-[84px] p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer group ${
+                    className={`min-h-[76px] sm:min-h-[90px] p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer group ${
                       isSelected
                         ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-400 shadow-md'
                         : day.isToday
@@ -467,11 +515,18 @@ export const QuestCalendarView: React.FC = () => {
                       >
                         {day.dayNum}
                       </span>
-                      {day.isToday && (
-                        <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded">
-                          오늘
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {dayMemo && (
+                          <span className="text-[10px] text-amber-600 bg-amber-100/80 p-0.5 rounded" title={dayMemo.content}>
+                            📌
+                          </span>
+                        )}
+                        {day.isToday && (
+                          <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded">
+                            오늘
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Quest status badges on calendar cell */}
@@ -486,6 +541,11 @@ export const QuestCalendarView: React.FC = () => {
                         <div className="flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100/90 px-1.5 py-0.5 rounded">
                           <Clock className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                           <span>대기 {pendingCount}</span>
+                        </div>
+                      )}
+                      {dayMemo && !approvedCount && !pendingCount && (
+                        <div className="text-[9px] font-medium text-slate-500 truncate max-w-full">
+                          📝 {dayMemo.content.slice(0, 8)}..
                         </div>
                       )}
                     </div>
@@ -504,7 +564,7 @@ export const QuestCalendarView: React.FC = () => {
                 <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
                 {currentMonth}월 {selectedWeekIndex + 1}주차 ({currentWeekDays[0]?.date} ~ {currentWeekDays[currentWeekDays.length - 1]?.date})
               </span>
-              <span className="text-slate-400">날짜를 클릭하면 상세 퀘스트를 제출 및 확인할 수 있습니다.</span>
+              <span className="text-slate-400">날짜를 클릭하면 상세 퀘스트 및 메모를 확인/작성할 수 있습니다.</span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-7 gap-2.5">
@@ -518,6 +578,9 @@ export const QuestCalendarView: React.FC = () => {
                 );
                 const approvedCount = dayLogs.filter((l) => l.status === 'approved').length;
                 const pendingCount = dayLogs.filter((l) => l.status === 'pending').length;
+                const dayMemo = calendarMemos.find(
+                  (m) => m.userId === currentUser.id && m.targetDate === day.date
+                );
                 const dayActiveCount = quests.filter((q) =>
                   isQuestActiveForDateAndStudent(
                     q,
@@ -553,11 +616,18 @@ export const QuestCalendarView: React.FC = () => {
                       >
                         {day.dayOfWeek}요일
                       </span>
-                      {day.isToday && (
-                        <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded">
-                          오늘
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {dayMemo && (
+                          <span className="text-[10px] text-amber-600 bg-amber-100/80 px-1 rounded font-bold" title={dayMemo.content}>
+                            📌
+                          </span>
+                        )}
+                        {day.isToday && (
+                          <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded">
+                            오늘
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div
@@ -587,8 +657,8 @@ export const QuestCalendarView: React.FC = () => {
                           <span>{pendingCount}개 대기</span>
                         </div>
                       ) : (
-                        <div className="text-[10px] text-slate-400 font-semibold">
-                          과제 {dayActiveCount}개
+                        <div className="text-[10px] text-slate-400 font-semibold truncate">
+                          {dayMemo ? `📌 ${dayMemo.content.slice(0, 6)}..` : `과제 ${dayActiveCount}개`}
                         </div>
                       )}
                     </div>
@@ -596,6 +666,98 @@ export const QuestCalendarView: React.FC = () => {
                 );
               })}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* 📝 날짜별 개인 메모 & 다짐/학습 노트 영역 */}
+      <div className="bg-linear-to-r from-amber-50/70 via-orange-50/50 to-amber-50/70 border border-amber-200/80 rounded-3xl p-5 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+              <StickyNote className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-slate-850 flex items-center gap-1.5">
+                <span className="text-amber-900 font-black font-mono">{selectedDate}</span> 나의 하루 메모 & 학습 노트
+              </h3>
+              <p className="text-xs text-slate-500">
+                선택한 날짜에 기억할 과제, 준비물, 복습 메모나 하루 다짐을 남겨보세요.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {currentSelectedMemo && !isEditingDailyMemo && (
+              <>
+                <button
+                  onClick={() => setIsEditingDailyMemo(true)}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> 수정
+                </button>
+                <button
+                  onClick={handleDeleteDailyMemo}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> 삭제
+                </button>
+              </>
+            )}
+            {(!currentSelectedMemo || isEditingDailyMemo) && (
+              <button
+                onClick={handleSaveDailyMemo}
+                disabled={!dailyMemoText.trim()}
+                className={`px-4 py-1.5 rounded-xl font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                  dailyMemoText.trim()
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <Save className="w-3.5 h-3.5" /> {currentSelectedMemo ? '메모 수정 저장' : '메모 등록'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {currentSelectedMemo && !isEditingDailyMemo ? (
+          <div className="bg-white/90 border border-amber-200 rounded-2xl p-4 shadow-2xs flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  📌 저장된 메모
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {new Date(currentSelectedMemo.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <p className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
+                {currentSelectedMemo.content}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <textarea
+              rows={2}
+              value={dailyMemoText}
+              onChange={(e) => setDailyMemoText(e.target.value)}
+              placeholder="예: 3교시 체육 준비물(줄넘기) 챙기기, 오늘 1인 1역 칠판 청소 당번 완료하기, 국어 4단원 복습하기..."
+              className="w-full p-3.5 rounded-2xl bg-white border border-amber-300 text-slate-800 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400 shadow-2xs"
+            />
+            {isEditingDailyMemo && (
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setDailyMemoText(currentSelectedMemo?.content || '');
+                    setIsEditingDailyMemo(false);
+                  }}
+                  className="px-3 py-1 text-xs text-slate-600 hover:text-slate-800 bg-white border border-slate-200 rounded-xl cursor-pointer"
+                >
+                  수정 취소
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

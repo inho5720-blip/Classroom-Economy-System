@@ -1,5 +1,23 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Profile, StudentStats, StatKey, PointLedger, Job, Seat, ShopItem, ShopOrder, AuctionItem, AuctionBid, Quest, QuestLog, TaxSetting, QuestFrequencyType } from '../types';
+import {
+  Profile,
+  StudentStats,
+  StatKey,
+  PointLedger,
+  Job,
+  JobApplication,
+  StudentJobAssignment,
+  Seat,
+  ShopItem,
+  ShopOrder,
+  AuctionItem,
+  AuctionBid,
+  Quest,
+  QuestLog,
+  CalendarMemo,
+  TaxSetting,
+  QuestFrequencyType,
+} from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -156,32 +174,39 @@ export async function updateProfileInSupabase(
 }
 
 /**
- * Supabase DB의 point_transactions 테이블에서 전자 통장 거래 로그 조회
+ * Supabase DB의 point_transactions / point_ledgers 테이블에서 전자 통장 거래 로그 조회
  */
 export async function fetchPointLedgersFromSupabase(): Promise<PointLedger[] | null> {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
+    let response = await supabase
       .from('point_transactions')
       .select('*')
       .order('created_at', { ascending: true });
 
-    if (error) {
-      // 테이블이 아직 없거나 에러 시 경고 로그
-      console.warn('[Supabase] Failed to fetch point transactions:', error.message);
+    if (response.error) {
+      // 'point_ledgers' 대체 테이블명 시도
+      response = await supabase
+        .from('point_ledgers')
+        .select('*')
+        .order('created_at', { ascending: true });
+    }
+
+    if (response.error) {
+      console.warn('[Supabase] Failed to fetch point transactions:', response.error.message);
       return null;
     }
 
-    if (!data) return null;
+    if (!response.data) return null;
 
-    return data.map((row: any) => ({
-      id: row.id,
-      userId: row.user_id,
-      amount: Number(row.amount),
-      balanceAfter: Number(row.balance_after),
-      category: row.category,
+    return response.data.map((row: any) => ({
+      id: String(row.id),
+      userId: row.user_id || row.userId || row.student_id,
+      amount: Number(row.amount ?? 0),
+      balanceAfter: Number(row.balance_after ?? row.balanceAfter ?? row.balance ?? 0),
+      category: row.category || 'teacher_adjust',
       description: row.description || '',
-      createdAt: row.created_at || new Date().toISOString(),
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
     }));
   } catch (err) {
     console.warn('[Supabase] Error connecting to point_transactions DB:', err);
@@ -197,7 +222,7 @@ export async function insertPointTransactionToSupabase(
 ): Promise<boolean> {
   if (!supabase) return false;
   try {
-    const { error } = await supabase.from('point_transactions').insert({
+    const payload = {
       id: transaction.id,
       user_id: transaction.userId,
       amount: transaction.amount,
@@ -205,11 +230,17 @@ export async function insertPointTransactionToSupabase(
       category: transaction.category,
       description: transaction.description,
       created_at: transaction.createdAt,
-    });
+    };
+
+    let { error } = await supabase.from('point_transactions').upsert(payload);
 
     if (error) {
-      console.warn('[Supabase] Failed to insert point transaction:', error.message);
-      return false;
+      // point_ledgers 테이블명 대체 시도
+      const res = await supabase.from('point_ledgers').upsert(payload);
+      if (res.error) {
+        console.warn('[Supabase] Failed to insert point transaction to both tables:', error.message, res.error.message);
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -1480,19 +1511,18 @@ export async function deleteTaxSettingFromSupabase(taxId: string): Promise<boole
 }
 
 /**
- * Supabase DB에 초기 세금 정책 일괄 시딩
+ * Supabase DB에 세금 정책 일괄 업서트/시딩
  */
-export async function bulkUpsertTaxSettingsToSupabase(taxesList: TaxSetting[]): Promise<boolean> {
-  if (!supabase || taxesList.length === 0) return false;
+export async function bulkUpsertTaxSettingsToSupabase(taxList: TaxSetting[]): Promise<boolean> {
+  if (!supabase || taxList.length === 0) return false;
   try {
-    const rows = taxesList.map((t) => ({
-      id: t.id,
-      name: t.name,
-      tax_type: t.taxType,
-      value: t.value,
-      description: t.description || '',
-      is_active: Boolean(t.isActive),
-      created_at: new Date().toISOString(),
+    const rows = taxList.map((tax) => ({
+      id: tax.id,
+      name: tax.name,
+      tax_type: tax.taxType,
+      value: tax.value,
+      description: tax.description || '',
+      is_active: Boolean(tax.isActive),
       updated_at: new Date().toISOString(),
     }));
 
@@ -1503,7 +1533,310 @@ export async function bulkUpsertTaxSettingsToSupabase(taxesList: TaxSetting[]): 
     }
     return true;
   } catch (err) {
-    console.warn('[Supabase] Error bulk upserting tax_settings:', err);
+    console.warn('[Supabase] Error in bulkUpsertTaxSettingsToSupabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 job_applications 테이블에서 모든 직업 지원서 조회
+ */
+export async function fetchJobApplicationsFromSupabase(): Promise<JobApplication[] | null> {
+  if (!supabase) return null;
+  try {
+    let response = await supabase
+      .from('job_applications')
+      .select('*')
+      .order('applied_at', { ascending: false });
+
+    if (response.error) {
+      console.warn('[Supabase] Failed to fetch job applications:', response.error.message);
+      return null;
+    }
+
+    if (!response.data) return null;
+
+    return response.data.map((row: any) => ({
+      id: String(row.id),
+      userId: row.user_id || row.userId || row.student_id,
+      jobId: String(row.job_id || row.jobId),
+      proposedJobTitle: row.proposed_job_title || row.proposedJobTitle,
+      proposedJobDescription: row.proposed_job_description || row.proposedJobDescription,
+      proposedWeeklySalary: row.proposed_weekly_salary !== undefined && row.proposed_weekly_salary !== null ? Number(row.proposed_weekly_salary) : row.proposedWeeklySalary ? Number(row.proposedWeeklySalary) : undefined,
+      proposedIcon: row.proposed_icon || row.proposedIcon,
+      proposedCategory: row.proposed_category || row.proposedCategory,
+      reason: row.reason || '',
+      pledge: row.pledge || '',
+      status: (row.status || 'pending') as JobApplication['status'],
+      rejectReason: row.reject_reason || row.rejectReason,
+      appliedAt: row.applied_at || row.appliedAt || new Date().toISOString(),
+      reviewedAt: row.reviewed_at || row.reviewedAt,
+      reviewedBy: row.reviewed_by || row.reviewedBy,
+    }));
+  } catch (err) {
+    console.warn('[Supabase] Error fetching job applications:', err);
+    return null;
+  }
+}
+
+/**
+ * Supabase DB의 job_applications 테이블에 지원서 저장/업서트
+ */
+export async function upsertJobApplicationToSupabase(app: JobApplication): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: app.id,
+      user_id: app.userId,
+      job_id: app.jobId,
+      proposed_job_title: app.proposedJobTitle || null,
+      proposed_job_description: app.proposedJobDescription || null,
+      proposed_weekly_salary: app.proposedWeeklySalary || null,
+      proposed_icon: app.proposedIcon || null,
+      proposed_category: app.proposedCategory || null,
+      reason: app.reason || '',
+      pledge: app.pledge || '',
+      status: app.status,
+      reject_reason: app.rejectReason || null,
+      applied_at: app.appliedAt,
+      reviewed_at: app.reviewedAt || null,
+      reviewed_by: app.reviewedBy || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('job_applications').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] Failed to upsert job application:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error upserting job application:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 job_applications 테이블에서 특정 지원서 업데이트
+ */
+export async function updateJobApplicationInSupabase(
+  appId: string,
+  updates: Partial<JobApplication>
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const rowUpdates: any = { updated_at: new Date().toISOString() };
+    if (updates.status !== undefined) rowUpdates.status = updates.status;
+    if (updates.rejectReason !== undefined) rowUpdates.reject_reason = updates.rejectReason;
+    if (updates.reviewedAt !== undefined) rowUpdates.reviewed_at = updates.reviewedAt;
+    if (updates.reviewedBy !== undefined) rowUpdates.reviewed_by = updates.reviewedBy;
+
+    const { error } = await supabase.from('job_applications').update(rowUpdates).eq('id', appId);
+    if (error) {
+      console.warn('[Supabase] Failed to update job application:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error updating job application:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 job_applications 테이블에서 지원서 삭제 (취소)
+ */
+export async function deleteJobApplicationFromSupabase(appId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('job_applications').delete().eq('id', appId);
+    if (error) {
+      console.warn('[Supabase] Failed to delete job application:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error deleting job application:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 student_job_assignments 테이블에서 학생 직업 배정 목록 조회
+ */
+export async function fetchStudentJobAssignmentsFromSupabase(): Promise<StudentJobAssignment[] | null> {
+  if (!supabase) return null;
+  try {
+    let response = await supabase
+      .from('student_job_assignments')
+      .select('*');
+
+    if (response.error) {
+      // 대체 테이블명 시도
+      response = await supabase.from('student_jobs').select('*');
+    }
+
+    if (response.error) {
+      console.warn('[Supabase] Failed to fetch student job assignments:', response.error.message);
+      return null;
+    }
+
+    if (!response.data) return null;
+
+    return response.data.map((row: any) => ({
+      id: String(row.id),
+      userId: row.user_id || row.userId || row.student_id,
+      jobId: String(row.job_id || row.jobId),
+      assignedAt: row.assigned_at || row.assignedAt || new Date().toISOString(),
+      isActive: Boolean(row.is_active ?? row.isActive ?? true),
+    }));
+  } catch (err) {
+    console.warn('[Supabase] Error fetching student job assignments:', err);
+    return null;
+  }
+}
+
+/**
+ * Supabase DB의 student_job_assignments 테이블에 배정 추가 또는 업서트
+ */
+export async function upsertStudentJobAssignmentToSupabase(
+  assignment: StudentJobAssignment
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: assignment.id,
+      user_id: assignment.userId,
+      job_id: assignment.jobId,
+      assigned_at: assignment.assignedAt,
+      is_active: assignment.isActive,
+    };
+
+    let { error } = await supabase.from('student_job_assignments').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      const res = await supabase.from('student_jobs').upsert(payload, { onConflict: 'id' });
+      if (res.error) {
+        console.warn('[Supabase] Failed to upsert student job assignment:', error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error upserting student job assignment:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 student_job_assignments 테이블에서 배정 삭제
+ */
+export async function deleteStudentJobAssignmentFromSupabase(
+  userId: string,
+  jobId?: string
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    let query = supabase.from('student_job_assignments').delete().eq('user_id', userId);
+    if (jobId) {
+      query = query.eq('job_id', jobId);
+    }
+    const { error } = await query;
+    if (error) {
+      // student_jobs fallback
+      let altQuery = supabase.from('student_jobs').delete().eq('user_id', userId);
+      if (jobId) altQuery = altQuery.eq('job_id', jobId);
+      await altQuery;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error deleting student job assignment:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 calendar_memos 테이블에서 일별 메모 목록 조회
+ */
+export async function fetchCalendarMemosFromSupabase(userId?: string): Promise<CalendarMemo[] | null> {
+  if (!supabase) return null;
+  try {
+    let query = supabase.from('calendar_memos').select('*').order('created_at', { ascending: true });
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    let response = await query;
+
+    if (response.error) {
+      // 대체 테이블명 시도
+      let altQuery = supabase.from('student_memos').select('*');
+      if (userId) altQuery = altQuery.eq('user_id', userId);
+      response = await altQuery;
+    }
+
+    if (response.error) {
+      console.warn('[Supabase] Failed to fetch calendar memos:', response.error.message);
+      return null;
+    }
+
+    if (!response.data) return null;
+
+    return response.data.map((row: any) => ({
+      id: String(row.id),
+      userId: row.user_id || row.userId || row.student_id,
+      targetDate: row.target_date || row.targetDate || row.date,
+      content: row.content || row.memo || '',
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+      updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn('[Supabase] Error fetching calendar memos:', err);
+    return null;
+  }
+}
+
+/**
+ * Supabase DB의 calendar_memos 테이블에 일별 메모 저장/수정
+ */
+export async function upsertCalendarMemoToSupabase(memo: CalendarMemo): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: memo.id,
+      user_id: memo.userId,
+      target_date: memo.targetDate,
+      content: memo.content,
+      created_at: memo.createdAt,
+      updated_at: memo.updatedAt,
+    };
+
+    let { error } = await supabase.from('calendar_memos').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      const altRes = await supabase.from('student_memos').upsert(payload, { onConflict: 'id' });
+      if (altRes.error) {
+        console.warn('[Supabase] Failed to upsert calendar memo:', error.message);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error upserting calendar memo:', err);
+    return false;
+  }
+}
+
+/**
+ * Supabase DB의 calendar_memos 테이블에서 일별 메모 삭제
+ */
+export async function deleteCalendarMemoFromSupabase(memoId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    let { error } = await supabase.from('calendar_memos').delete().eq('id', memoId);
+    if (error) {
+      await supabase.from('student_memos').delete().eq('id', memoId);
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] Error deleting calendar memo:', err);
     return false;
   }
 }

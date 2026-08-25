@@ -8,6 +8,7 @@ import {
   JobApplication,
   Quest,
   QuestLog,
+  CalendarMemo,
   TaxSetting,
   Seat,
   Title,
@@ -52,6 +53,16 @@ import {
   updateJobInSupabase,
   deleteJobFromSupabase,
   bulkUpsertJobsToSupabase,
+  fetchJobApplicationsFromSupabase,
+  upsertJobApplicationToSupabase,
+  updateJobApplicationInSupabase,
+  deleteJobApplicationFromSupabase,
+  fetchStudentJobAssignmentsFromSupabase,
+  upsertStudentJobAssignmentToSupabase,
+  deleteStudentJobAssignmentFromSupabase,
+  fetchCalendarMemosFromSupabase,
+  upsertCalendarMemoToSupabase,
+  deleteCalendarMemoFromSupabase,
   fetchSeatsFromSupabase,
   updateSeatInSupabase,
   saveAllSeatsToSupabase,
@@ -149,6 +160,11 @@ interface AppContextType {
   deleteQuest: (questId: string, permanent?: boolean) => void;
   archiveQuest: (questId: string) => void;
   restoreQuest: (questId: string) => void;
+
+  // Calendar Memo actions (Student daily planner/notes)
+  calendarMemos: CalendarMemo[];
+  saveCalendarMemo: (targetDate: string, content: string, memoId?: string) => void;
+  deleteCalendarMemo: (memoId: string) => void;
 
   // Salary & Economy actions
   executeWeeklySalarySettlement: () => { totalPaid: number; totalTax: number; count: number };
@@ -303,6 +319,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_POINT_LEDGER;
   });
 
+  const [calendarMemos, setCalendarMemos] = useState<CalendarMemo[]>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_calendarMemos`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [auctions, setAuctions] = useState<AuctionItem[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_auctions`);
     return saved ? JSON.parse(saved) : INITIAL_AUCTION_ITEMS;
@@ -346,6 +367,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY}_jobApplications`, JSON.stringify(jobApplications));
   }, [jobApplications]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_calendarMemos`, JSON.stringify(calendarMemos));
+  }, [calendarMemos]);
 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY}_quests`, JSON.stringify(quests));
@@ -412,6 +437,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           cloudQuests,
           cloudQuestLogs,
           cloudTaxSettings,
+          cloudJobApps,
+          cloudStudentJobs,
+          cloudMemos,
         ] = await Promise.all([
           fetchProfilesFromSupabase(),
           fetchStatsFromSupabase(),
@@ -425,6 +453,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchQuestsFromSupabase(),
           fetchQuestLogsFromSupabase(),
           fetchTaxSettingsFromSupabase(),
+          fetchJobApplicationsFromSupabase(),
+          fetchStudentJobAssignmentsFromSupabase(),
+          fetchCalendarMemosFromSupabase(),
         ]);
 
         if (!isMounted) return;
@@ -463,6 +494,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             );
             setJobs(INITIAL_JOBS);
           }
+        }
+
+        // 💼 1인 1역 지원서 동기화
+        if (cloudJobApps !== null) {
+          console.log(`[Supabase] Successfully loaded ${cloudJobApps.length} job applications from DB.`);
+          setJobApplications(cloudJobApps);
+        }
+
+        // 💼 학생 직업 배정 동기화
+        if (cloudStudentJobs !== null && cloudStudentJobs.length > 0) {
+          console.log(`[Supabase] Successfully loaded ${cloudStudentJobs.length} student job assignments from DB.`);
+          setStudentJobs(cloudStudentJobs);
+        }
+
+        // 📅 달력 일별 메모 동기화
+        if (cloudMemos !== null) {
+          console.log(`[Supabase] Successfully loaded ${cloudMemos.length} calendar memos from DB.`);
+          setCalendarMemos(cloudMemos);
         }
 
         if (cloudSeats !== null) {
@@ -562,6 +611,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (supabase) {
       realtimeChannel = supabase
         .channel('public:classroom_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'job_applications' },
+          async () => {
+            const freshApps = await fetchJobApplicationsFromSupabase();
+            if (freshApps !== null && isMounted) {
+              setJobApplications(freshApps);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'student_job_assignments' },
+          async () => {
+            const freshSJ = await fetchStudentJobAssignmentsFromSupabase();
+            if (freshSJ !== null && isMounted) {
+              setStudentJobs(freshSJ);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'point_transactions' },
+          async () => {
+            const freshLedger = await fetchPointLedgersFromSupabase();
+            if (freshLedger !== null && isMounted) {
+              const sorted = [...freshLedger].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setPointLedger(sorted);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'calendar_memos' },
+          async () => {
+            const freshMemos = await fetchCalendarMemosFromSupabase();
+            if (freshMemos !== null && isMounted) {
+              setCalendarMemos(freshMemos);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          async () => {
+            const freshProfiles = await fetchProfilesFromSupabase();
+            if (freshProfiles && freshProfiles.length > 0 && isMounted) {
+              setUsers(freshProfiles);
+            }
+          }
+        )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'quests' },
@@ -1008,20 +1108,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const assignStudentJob = (userId: string, jobId: string) => {
+    const newAssignment: StudentJobAssignment = {
+      id: `assign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      userId,
+      jobId,
+      assignedAt: new Date().toISOString().split('T')[0],
+      isActive: true,
+    };
+
     setStudentJobs((prev) => {
       const alreadyAssigned = prev.some((sj) => sj.userId === userId && sj.jobId === jobId && sj.isActive);
       if (alreadyAssigned) return prev;
-      return [
-        ...prev,
-        {
-          id: `assign-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          userId,
-          jobId,
-          assignedAt: new Date().toISOString().split('T')[0],
-          isActive: true,
-        },
-      ];
+      return [...prev, newAssignment];
     });
+
+    if (isSupabaseConfigured) {
+      upsertStudentJobAssignmentToSupabase(newAssignment).catch((e) =>
+        console.warn('[Supabase] Failed to persist student job assignment:', e)
+      );
+    }
   };
 
   const unassignStudentJob = (userId: string, jobId?: string) => {
@@ -1031,6 +1136,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.filter((sj) => sj.userId !== userId);
     });
+
+    if (isSupabaseConfigured) {
+      deleteStudentJobAssignmentFromSupabase(userId, jobId).catch((e) =>
+        console.warn('[Supabase] Failed to delete student job assignment:', e)
+      );
+    }
   };
 
   // Job Application actions
@@ -1056,6 +1167,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setJobApplications((prev) => [newApp, ...prev]);
+
+    if (isSupabaseConfigured) {
+      upsertJobApplicationToSupabase(newApp).catch((e) =>
+        console.warn('[Supabase] Failed to persist job application:', e)
+      );
+    }
+
     return {
       success: true,
       message: '직업 신청서가 성공적으로 제출되었습니다! 선생님 승인 후 정식 배정됩니다.',
@@ -1099,18 +1217,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       assignStudentJob(app.userId, targetJobId);
     }
 
+    const updatedApp: JobApplication = {
+      ...app,
+      status: 'approved',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: teacherId,
+    };
+
     setJobApplications((prev) =>
-      prev.map((a) =>
-        a.id === applicationId
-          ? {
-              ...a,
-              status: 'approved',
-              reviewedAt: new Date().toISOString(),
-              reviewedBy: teacherId,
-            }
-          : a
-      )
+      prev.map((a) => (a.id === applicationId ? updatedApp : a))
     );
+
+    if (isSupabaseConfigured) {
+      upsertJobApplicationToSupabase(updatedApp).catch((e) =>
+        console.warn('[Supabase] Failed to update approved job application:', e)
+      );
+    }
 
     triggerCelebration();
     return {
@@ -1127,19 +1249,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const app = jobApplications.find((a) => a.id === applicationId);
     if (!app) return { success: false, message: '지원서를 찾을 수 없습니다.' };
 
+    const updatedApp: JobApplication = {
+      ...app,
+      status: 'rejected',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: teacherId,
+      rejectReason: reason || '선생님 검토 결과 이번 선발에서는 배정되지 않았습니다.',
+    };
+
     setJobApplications((prev) =>
-      prev.map((a) =>
-        a.id === applicationId
-          ? {
-              ...a,
-              status: 'rejected',
-              reviewedAt: new Date().toISOString(),
-              reviewedBy: teacherId,
-              rejectReason: reason || '선생님 검토 결과 이번 선발에서는 배정되지 않았습니다.',
-            }
-          : a
-      )
+      prev.map((a) => (a.id === applicationId ? updatedApp : a))
     );
+
+    if (isSupabaseConfigured) {
+      upsertJobApplicationToSupabase(updatedApp).catch((e) =>
+        console.warn('[Supabase] Failed to update rejected job application:', e)
+      );
+    }
 
     return {
       success: true,
@@ -1154,7 +1280,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (app.status !== 'pending') return { success: false, message: '이미 심사가 완료된 지원서는 취소할 수 없습니다.' };
 
     setJobApplications((prev) => prev.filter((a) => a.id !== applicationId));
+
+    if (isSupabaseConfigured) {
+      deleteJobApplicationFromSupabase(applicationId).catch((e) =>
+        console.warn('[Supabase] Failed to delete job application:', e)
+      );
+    }
+
     return { success: true, message: '지원서가 성공적으로 취소되었습니다.' };
+  };
+
+  // Calendar Memo actions
+  const saveCalendarMemo = (targetDate: string, content: string, memoId?: string) => {
+    const activeUserId = currentUserId;
+    let memoToSave: CalendarMemo;
+
+    if (memoId) {
+      const existing = calendarMemos.find((m) => m.id === memoId);
+      memoToSave = {
+        id: memoId,
+        userId: existing ? existing.userId : activeUserId,
+        targetDate,
+        content,
+        createdAt: existing ? existing.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setCalendarMemos((prev) => prev.map((m) => (m.id === memoId ? memoToSave : m)));
+    } else {
+      // 해당 날짜 + 유저의 기존 메모가 있는지 확인
+      const existing = calendarMemos.find((m) => m.userId === activeUserId && m.targetDate === targetDate);
+      if (existing) {
+        memoToSave = {
+          ...existing,
+          content,
+          updatedAt: new Date().toISOString(),
+        };
+        setCalendarMemos((prev) => prev.map((m) => (m.id === existing.id ? memoToSave : m)));
+      } else {
+        memoToSave = {
+          id: `memo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          userId: activeUserId,
+          targetDate,
+          content,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setCalendarMemos((prev) => [memoToSave, ...prev]);
+      }
+    }
+
+    if (isSupabaseConfigured) {
+      upsertCalendarMemoToSupabase(memoToSave).catch((e) =>
+        console.warn('[Supabase] Failed to upsert calendar memo:', e)
+      );
+    }
+  };
+
+  const deleteCalendarMemo = (memoId: string) => {
+    setCalendarMemos((prev) => prev.filter((m) => m.id !== memoId));
+    if (isSupabaseConfigured) {
+      deleteCalendarMemoFromSupabase(memoId).catch((e) =>
+        console.warn('[Supabase] Failed to delete calendar memo:', e)
+      );
+    }
   };
 
   // Quest actions
@@ -2355,6 +2543,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteQuest,
         archiveQuest,
         restoreQuest,
+        calendarMemos,
+        saveCalendarMemo,
+        deleteCalendarMemo,
         executeWeeklySalarySettlement,
         createTaxSetting,
         updateTaxSetting,

@@ -56,7 +56,9 @@ export const PassbookView: React.FC = () => {
 
   // Trend Range State: 'week' (한 주/일별), 'month' (한 달/주별), 'multi_month' (여러 달/월별)
   const [trendRange, setTrendRange] = useState<TrendRangeType>('week');
-  const [selectedMonthForWeeklyTrend, setSelectedMonthForWeeklyTrend] = useState<string>('2026-08');
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonthForWeeklyTrend, setSelectedMonthForWeeklyTrend] = useState<string>(currentMonthStr);
 
   const targetUser =
     currentUser.role === 'teacher'
@@ -86,15 +88,14 @@ export const PassbookView: React.FC = () => {
       }
     });
     // Ensure current month is included
-    const curYM = '2026-08';
-    monthsSet.add(curYM);
+    monthsSet.add(currentMonthStr);
     return Array.from(monthsSet).sort().reverse();
-  }, [userLedgersAsc]);
+  }, [userLedgersAsc, currentMonthStr]);
 
   // Ensure selected month is valid
   const activeSelectedMonth = availableMonths.includes(selectedMonthForWeeklyTrend)
     ? selectedMonthForWeeklyTrend
-    : availableMonths[0] || '2026-08';
+    : availableMonths[0] || currentMonthStr;
 
   // ----------------------------------------------------
   // 1. TREND DATA GENERATION (Week / Month / Multi-Month)
