@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Profile, StudentStats, StatKey, PointLedger, Job, Seat, ShopItem, ShopOrder, AuctionItem, AuctionBid, Quest, QuestLog, TaxSetting } from '../types';
+import { Profile, StudentStats, StatKey, PointLedger, Job, Seat, ShopItem, ShopOrder, AuctionItem, AuctionBid, Quest, QuestLog, TaxSetting, QuestFrequencyType } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -1007,6 +1007,24 @@ function parseQuestRow(row: any): Quest {
   const rawReward = row.reward_points ?? row.reward ?? row.rewardPoints ?? 100;
   const rawTargetType = row.target_student_type || row.target_type || row.targetStudentType || 'all';
 
+  // Determine frequencyType and isRecurring smartly
+  const rawFreq = row.frequency_type || row.frequencyType;
+  const rawRecurring = row.is_recurring ?? row.isRecurring;
+  
+  let frequencyType: QuestFrequencyType = 'recurring';
+  let isRecurring = true;
+
+  if (rawFreq === 'once' || rawFreq === 'recurring') {
+    frequencyType = rawFreq;
+    isRecurring = frequencyType === 'recurring';
+  } else if (rawRecurring !== undefined && rawRecurring !== null) {
+    isRecurring = Boolean(rawRecurring);
+    frequencyType = isRecurring ? 'recurring' : 'once';
+  } else if (row.due_date || row.dueDate) {
+    frequencyType = 'once';
+    isRecurring = false;
+  }
+
   return {
     id: String(row.id),
     title: row.title || '퀘스트',
@@ -1020,8 +1038,8 @@ function parseQuestRow(row: any): Quest {
         : row.statRewardAmount !== undefined && row.statRewardAmount !== null
         ? Number(row.statRewardAmount)
         : 1,
-    isRecurring: Boolean(row.is_recurring ?? row.isRecurring ?? true),
-    frequencyType: row.frequency_type || row.frequencyType || 'recurring',
+    isRecurring,
+    frequencyType,
     recurringDays,
     targetStudentType: rawTargetType,
     targetStudentIds,

@@ -65,9 +65,21 @@ export const QUEST_EMOJI_CATEGORIES = [
 ];
 
 /**
+ * Returns today's date formatted as YYYY-MM-DD using local time
+ */
+export function getTodayDateStr(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Returns Day-Of-Week index (0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토) safely from YYYY-MM-DD
  */
 export function getDayOfWeekFromYMD(ymd: string): number {
+  if (!ymd) return new Date().getDay();
   const [y, m, d] = ymd.split('-').map(Number);
   const dateObj = new Date(y, m - 1, d);
   return dateObj.getDay();
@@ -94,25 +106,29 @@ export function isQuestActiveForDateAndStudent(
     );
   }
 
-  // 1. Target student check
-  if (!isTeacher && quest.targetStudentType === 'specific') {
-    if (!quest.targetStudentIds || !quest.targetStudentIds.includes(studentId)) {
+  // 1. Target student check (all vs specific)
+  const targetType = quest.targetStudentType || (quest as any).target_type || 'all';
+  if (!isTeacher && targetType === 'specific') {
+    const studentIds = quest.targetStudentIds || (quest as any).target_student_ids || [];
+    if (studentIds.length > 0 && !studentIds.includes(studentId)) {
       return false;
     }
   }
 
   // 2. Target job check
+  // If targeted to a specific job and student has active job assignments, ensure it matches
   if (!isTeacher && quest.questType === 'job' && quest.targetJobId) {
-    if (Array.isArray(studentJobId)) {
+    if (Array.isArray(studentJobId) && studentJobId.length > 0) {
       if (!studentJobId.includes(quest.targetJobId)) {
+        // If quest was specifically targeted to a single student group, filter out
+        if (targetType === 'specific') {
+          return false;
+        }
+      }
+    } else if (studentJobId && typeof studentJobId === 'string') {
+      if (studentJobId !== quest.targetJobId && targetType === 'specific') {
         return false;
       }
-    } else if (studentJobId) {
-      if (studentJobId !== quest.targetJobId) {
-        return false;
-      }
-    } else {
-      return false;
     }
   }
 
@@ -120,34 +136,35 @@ export function isQuestActiveForDateAndStudent(
   const isOneTime = quest.frequencyType === 'once' || (!quest.isRecurring && !!quest.dueDate);
 
   if (isOneTime) {
-    // A) Deadline check: after due date, it must not appear on that date
-    if (quest.dueDate && dateStr > quest.dueDate) {
-      return false;
-    }
-
     if (isTeacher) {
       return true;
     }
 
-    // B) Single quest completion check for student
+    const today = getTodayDateStr();
+
+    // Student Check
     const studentQuestLogs = questLogs.filter(
       (l) => l.questId === quest.id && l.userId === studentId
     );
 
     const approvedLog = studentQuestLogs.find((l) => l.status === 'approved');
     if (approvedLog) {
-      // If completed and approved, only show it on the exact completed targetDate (for history view),
-      // and do NOT show on any date after the completed date or any future date
+      // If completed and approved, show on the exact completed targetDate (for history view)
       return dateStr === approvedLog.targetDate;
     }
 
     const pendingLog = studentQuestLogs.find((l) => l.status === 'pending');
     if (pendingLog) {
-      // If submitted and pending, show on the submission date; hide on subsequent dates
-      return dateStr === pendingLog.targetDate;
+      // If submitted and pending, show on the submission date or today
+      return dateStr === pendingLog.targetDate || dateStr === today;
     }
 
-    // Not yet completed: active for dates up to dueDate
+    // If not completed yet:
+    // If dueDate exists and dateStr > dueDate: hide for past days in calendar, but show on today so student can complete overdue tasks
+    if (quest.dueDate && dateStr > quest.dueDate && dateStr !== today) {
+      return false;
+    }
+
     return true;
   }
 

@@ -127,7 +127,7 @@ export const PassbookView: React.FC = () => {
     if (trendRange === 'week') {
       // Find reference date (most recent transaction date or today: 2026-08-17)
       const latestTx = userLedgersAsc[userLedgersAsc.length - 1];
-      const refDate = latestTx ? new Date(latestTx.createdAt) : new Date('2026-08-17T12:00:00Z');
+      const refDate = latestTx ? new Date(latestTx.createdAt) : new Date();
       
       // Generate past 7 days up to refDate
       const days: { ymd: string; dateObj: Date; label: string }[] = [];

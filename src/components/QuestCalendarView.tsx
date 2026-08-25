@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -21,7 +21,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { isQuestActiveForDateAndStudent, getRecurringDaysLabel, getQuestRewardForStudent } from '../utils/questUtils';
+import { isQuestActiveForDateAndStudent, getRecurringDaysLabel, getQuestRewardForStudent, getTodayDateStr } from '../utils/questUtils';
 
 export const QuestCalendarView: React.FC = () => {
   const {
@@ -37,21 +37,22 @@ export const QuestCalendarView: React.FC = () => {
     triggerCelebration,
   } = useApp();
 
+  const todayStr = useMemo(() => getTodayDateStr(), []);
+  const todayDateObj = useMemo(() => new Date(), []);
+
   // View mode: 'week' | 'month'
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
 
   // Currently navigated Year & Month
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(8); // 1-12
-  const [selectedWeekIndex, setSelectedWeekIndex] = useState(2); // 0-indexed week within the month (Week 3 is index 2, containing Aug 17)
+  const [currentYear, setCurrentYear] = useState(() => todayDateObj.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => todayDateObj.getMonth() + 1); // 1-12
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
 
-  // Selected date state (defaults to today '2026-08-17')
-  const [selectedDate, setSelectedDate] = useState('2026-08-17');
+  // Selected date state (defaults to today)
+  const [selectedDate, setSelectedDate] = useState(() => getTodayDateStr());
   const [activeMemoInputQuestId, setActiveMemoInputQuestId] = useState<string | null>(null);
   const [memoInputText, setMemoInputText] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'homework' | 'job'>('all');
-
-  const todayStr = '2026-08-17';
 
   // Generate calendar days for the current year & month
   const { monthDays, weeksList } = useMemo(() => {
@@ -180,11 +181,19 @@ export const QuestCalendarView: React.FC = () => {
 
   // Quick reset to today
   const handleGoToToday = () => {
-    setCurrentYear(2026);
-    setCurrentMonth(8);
-    setSelectedWeekIndex(2);
+    const today = new Date();
+    setCurrentYear(today.getFullYear());
+    setCurrentMonth(today.getMonth() + 1);
     setSelectedDate(todayStr);
   };
+
+  // Sync selectedWeekIndex when selectedDate or weeksList changes
+  useEffect(() => {
+    const foundIdx = weeksList.findIndex((week) => week.some((d) => d.date === selectedDate));
+    if (foundIdx !== -1) {
+      setSelectedWeekIndex(foundIdx);
+    }
+  }, [selectedDate, weeksList]);
 
   const studentJobList = getStudentJobs ? getStudentJobs(currentUser.id) : [];
   const studentJobIds = studentJobList.map((j) => j.id);

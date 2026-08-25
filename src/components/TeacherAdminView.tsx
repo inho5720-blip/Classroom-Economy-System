@@ -44,6 +44,7 @@ import {
   QUEST_EMOJI_CATEGORIES,
   getRecurringDaysLabel,
   getQuestRewardForStudent,
+  getTodayDateStr,
 } from '../utils/questUtils';
 
 export const TeacherAdminView: React.FC = () => {
@@ -153,7 +154,7 @@ export const TeacherAdminView: React.FC = () => {
   const [newQuestTargetType, setNewQuestTargetType] = useState<QuestTargetType>('all');
   const [newQuestTargetStudentIds, setNewQuestTargetStudentIds] = useState<string[]>([]);
   const [newQuestFrequencyType, setNewQuestFrequencyType] = useState<QuestFrequencyType>('once');
-  const [newQuestDueDate, setNewQuestDueDate] = useState('2026-08-17');
+  const [newQuestDueDate, setNewQuestDueDate] = useState(() => getTodayDateStr());
   const [newQuestRecurringDays, setNewQuestRecurringDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [showEmojiDropdown, setShowEmojiDropdown] = useState(false);
 
@@ -1671,7 +1672,7 @@ export const TeacherAdminView: React.FC = () => {
       {activeAdminSubTab === 'quests' && (() => {
         const activeQuests = quests.filter((q) => !q.isArchived);
         const archivedQuests = quests.filter((q) => q.isArchived);
-        const todayStr = '2026-08-17';
+        const todayStr = getTodayDateStr();
 
         return (
           <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
@@ -2220,15 +2221,15 @@ export const TeacherAdminView: React.FC = () => {
                             setNewQuestIcon('💼');
                             setNewQuestStatType('contribution');
                             setNewQuestStatAmount(1);
-                            if (!newQuestTargetJobId && jobs.length > 0) {
-                              setNewQuestTargetJobId(jobs[0].id);
-                              setNewQuestReward(Math.round(jobs[0].weeklySalary / 5));
-                            } else if (newQuestTargetJobId) {
+                            if (newQuestTargetJobId) {
                               const selJob = jobs.find((j) => j.id === newQuestTargetJobId);
                               if (selJob) {
                                 setNewQuestReward(Math.round(selJob.weeklySalary / 5));
+                              } else {
+                                setNewQuestReward(100);
                               }
                             } else {
+                              setNewQuestTargetJobId('');
                               setNewQuestReward(100);
                             }
                           } else {

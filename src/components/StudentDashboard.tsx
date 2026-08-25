@@ -28,7 +28,7 @@ import { useApp } from '../context/AppContext';
 import { StatRadarChart } from './StatRadarChart';
 import { TitleEquipModal } from './TitleEquipModal';
 import { CharacterCustomizerModal } from './CharacterCustomizerModal';
-import { isQuestActiveForDateAndStudent, getQuestRewardForStudent } from '../utils/questUtils';
+import { isQuestActiveForDateAndStudent, getQuestRewardForStudent, getTodayDateStr } from '../utils/questUtils';
 import { getTotalExp, getRankInfo, getNextRankProgress } from '../utils/rankUtils';
 
 interface StudentDashboardProps {
@@ -79,7 +79,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
   const nextRankProgress = getNextRankProgress(totalStatPoints);
 
   // Today's date YYYY-MM-DD
-  const todayStr = '2026-08-17';
+  const todayStr = getTodayDateStr();
 
   // Today's quest logs
   const todayLogs = questLogs.filter((l) => l.userId === currentUser.id && l.targetDate === todayStr);
@@ -1050,7 +1050,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
 
                 {!isSeatOwner && (
                   <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
-                    <span>💡 자리를 600P에 매입하면 매주 자리세가 면제됩니다!</span>
+                    <span>💡 자리를 {(currentSeat.purchasePrice || 600).toLocaleString()}P에 매입하면 매주 자리세가 면제됩니다!</span>
                     <button
                       onClick={() => onNavigateTab('seats')}
                       className="text-xs px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition shrink-0 ml-2 shadow-2xs"
