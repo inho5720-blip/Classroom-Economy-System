@@ -129,6 +129,8 @@ interface AppContextType {
   pointLedger: PointLedger[];
   auctions: AuctionItem[];
   auctionBids: AuctionBid[];
+  economyResetDate: string;
+  setEconomyResetDate: (date: string) => void;
   isRankingPublic: boolean;
   setIsRankingPublic: (val: boolean) => void;
   
@@ -339,6 +341,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : true;
   });
 
+  const [economyResetDate, setEconomyResetDate] = useState<string>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_economyResetDate`);
+    if (saved) return saved;
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
+
   // Save to localStorage whenever state changes
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY}_users`, JSON.stringify(users));
@@ -415,6 +424,143 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY}_isRankingPublic`, JSON.stringify(isRankingPublic));
   }, [isRankingPublic]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY}_economyResetDate`, economyResetDate);
+  }, [economyResetDate]);
+
+  // 💰 자동 절약(frugality) 스탯 & 연속 절약(unspentDays) 일수 일별 동기화 계산
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const resetDate = economyResetDate || todayStr;
+
+    // 초기화 날짜부터 오늘까지의 날짜 배열 생성
+    const allDates: string[] = [];
+    try {
+      const start = new Date(resetDate);
+      const end = new Date(todayStr);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+        const cur = new Date(start);
+        while (cur <= end) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, '0');
+          const d = String(cur.getDate()).padStart(2, '0');
+          allDates.push(`${y}-${m}-${d}`);
+          cur.setDate(cur.getDate() + 1);
+        }
+      } else {
+        allDates.push(todayStr);
+      }
+    } catch {
+      allDates.push(todayStr);
+    }
+
+    // 1. 학생 연속 미소비 일수(unspentDays) 갱신
+    let usersNeedUpdate = false;
+    const nextUsers = users.map((u) => {
+      if (u.role !== 'student') return u;
+
+      const studentOrders = shopOrders.filter(
+        (o) => o.userId === u.id && o.purchasedAt.split('T')[0] >= resetDate
+      );
+      const purchaseDates = new Set(studentOrders.map((o) => o.purchasedAt.split('T')[0]));
+      pointLedger
+        .filter(
+          (l) =>
+            l.userId === u.id &&
+            l.category === 'shop_purchase' &&
+            l.createdAt.split('T')[0] >= resetDate
+        )
+        .forEach((l) => purchaseDates.add(l.createdAt.split('T')[0]));
+
+      let consecutive = 0;
+      for (let i = allDates.length - 1; i >= 0; i--) {
+        if (!purchaseDates.has(allDates[i])) {
+          consecutive++;
+        } else {
+          break;
+        }
+      }
+
+      if (u.unspentDays !== consecutive) {
+        usersNeedUpdate = true;
+        return { ...u, unspentDays: consecutive };
+      }
+      return u;
+    });
+
+    if (usersNeedUpdate) {
+      setUsers(nextUsers);
+    }
+
+    // 2. 학생 절약(frugality) 스탯 갱신 (초기값 1 + 미소비 일수 + 퀘스트 보너스)
+    setStats((prevStats) => {
+      let statsNeedUpdate = false;
+      const nextStats = { ...prevStats };
+
+      users.forEach((u) => {
+        if (u.role !== 'student') return;
+
+        const currentStudentStats = nextStats[u.id] || {
+          userId: u.id,
+          diligence: 1,
+          frugality: 1,
+          contribution: 1,
+          wisdom: 1,
+          credit: 1,
+        };
+
+        const studentOrders = shopOrders.filter(
+          (o) => o.userId === u.id && o.purchasedAt.split('T')[0] >= resetDate
+        );
+        const purchaseDates = new Set(studentOrders.map((o) => o.purchasedAt.split('T')[0]));
+        pointLedger
+          .filter(
+            (l) =>
+              l.userId === u.id &&
+              l.category === 'shop_purchase' &&
+              l.createdAt.split('T')[0] >= resetDate
+          )
+          .forEach((l) => purchaseDates.add(l.createdAt.split('T')[0]));
+
+        // 초기화 기준일 이후 상점 미구매 일수 계산
+        const unspentCount = allDates.filter((d) => !purchaseDates.has(d)).length;
+
+        // 퀘스트 수행으로 획득한 절약 스탯 보너스
+        const questFrugalityBonus = questLogs
+          .filter((l) => l.userId === u.id && l.status === 'approved')
+          .reduce((acc, l) => {
+            const q = quests.find((item) => item.id === l.questId);
+            if (q && q.statRewardType === 'frugality') {
+              return acc + (q.statRewardAmount || 1);
+            }
+            return acc;
+          }, 0);
+
+        const targetFrugality = Math.min(
+          100,
+          Math.max(1, 1 + unspentCount + questFrugalityBonus)
+        );
+
+        if (currentStudentStats.frugality !== targetFrugality) {
+          statsNeedUpdate = true;
+          const updated = {
+            ...currentStudentStats,
+            frugality: targetFrugality,
+          };
+          nextStats[u.id] = updated;
+
+          if (isSupabaseConfigured) {
+            upsertStudentStatsToSupabase(updated).catch((err) =>
+              console.warn('[Supabase] Failed to sync frugality stat in DB:', err)
+            );
+          }
+        }
+      });
+
+      return statsNeedUpdate ? nextStats : prevStats;
+    });
+  }, [economyResetDate, shopOrders, pointLedger, questLogs, users.length]);
 
   // 🌐 Supabase Cloud Database Realtime Sync on mount
   useEffect(() => {
@@ -981,6 +1127,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 🧹 신학기 학급 경제 데이터 전체 초기화 (Clean Slate)
   const resetClassroomEconomy = async (defaultPoints = 500): Promise<{ success: boolean; message: string }> => {
     try {
+      const todayDateStr = new Date().toISOString().split('T')[0];
+      setEconomyResetDate(todayDateStr);
+      localStorage.setItem(`${STORAGE_KEY}_economyResetDate`, todayDateStr);
+
       // 1. Reset all student balances to defaultPoints (500), teacher to 999999
       const cleanUsers = users.map((u) => ({
         ...u,
@@ -992,7 +1142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
       setUsers(cleanUsers);
 
-      // 2. Reset 5 stats to 1
+      // 2. Reset 5 stats to 1 (frugality = 1, diligence = 1, etc.)
       const cleanStats: Record<string, StudentStats> = {};
       cleanUsers.forEach((u) => {
         if (u.role === 'student') {
@@ -1040,6 +1190,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 6. Supabase reset if configured
       if (isSupabaseConfigured) {
         await resetPointTransactionsInSupabase();
+        // Update all student stats to 1 in Supabase
+        await Promise.all(
+          Object.values(cleanStats).map((st) =>
+            upsertStudentStatsToSupabase(st).catch((e) =>
+              console.warn('[Supabase] Failed to reset student stats:', e)
+            )
+          )
+        );
         // Update all profiles' points to default in Supabase
         await Promise.all(
           cleanUsers.map((u) =>
@@ -2520,6 +2678,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         pointLedger,
         auctions,
         auctionBids,
+        economyResetDate,
+        setEconomyResetDate,
         isRankingPublic,
         setIsRankingPublic,
         loginWithCredentials,

@@ -86,6 +86,7 @@ export const TeacherAdminView: React.FC = () => {
     closeAuction,
     deleteAuction,
     resetClassroomEconomy,
+    economyResetDate,
   } = useApp();
 
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<
@@ -3050,19 +3051,27 @@ export const TeacherAdminView: React.FC = () => {
           {/* Clean Reset Section for New Semester / Testing */}
           <div className="bg-rose-50/50 border border-rose-200/80 rounded-3xl p-6 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-rose-700 font-extrabold text-sm">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2 text-rose-700 font-extrabold text-sm">
                   <AlertTriangle className="w-4 h-4 text-rose-600" />
                   <span>학급 경제 데이터 클린 초기화 (신학기 시작)</span>
+                  {economyResetDate && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                      📅 최근 초기화 기준일: {economyResetDate}
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-slate-600">
-                  이전 테스트로 발생한 모든 전자 통장 거래 기록, 퀘스트 승인 내역, 상점 주문 내역을 말끔히 비우고 모든 학생의 포인트를 초기값(500P) 및 5대 스탯을 1로 재설정합니다. (Supabase 연결 시 DB도 함께 초기화됩니다)
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  이전 테스트로 발생한 모든 전자 통장 거래 기록, 퀘스트 승인 내역, 상점 주문 내역을 말끔히 비우고 모든 학생의 포인트를 초기값(500P) 및 5대 스탯을 1로 재설정합니다.
                 </p>
+                <div className="text-[11px] text-emerald-800 font-medium bg-emerald-50/70 border border-emerald-200/80 rounded-xl px-3 py-1.5 inline-block">
+                  💡 <strong>절약 스탯 자동 적립 규칙:</strong> 데이터 전체 초기화가 실행된 날짜({economyResetDate || '기준일'}) 이후부터 학생들이 상점 상품을 구매하지 않은 날마다 절약 스탯이 <strong>매일 +1씩 자동 누적</strong>됩니다.
+                </div>
               </div>
 
               <button
                 onClick={() => setShowResetConfirmModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition shrink-0 flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition shrink-0 flex items-center gap-2 cursor-pointer self-start sm:self-center"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>데이터 전체 초기화 실행</span>
