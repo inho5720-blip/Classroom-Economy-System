@@ -3,8 +3,9 @@ export type UserRole = 'teacher' | 'student';
 export interface Profile {
   id: string;
   studentNumber?: string; // e.g. "60101", "60102" (teacher is undefined)
-  name: string; // e.g. "강민우"
-  nickname: string; // e.g. "골드헌터 민우"
+  name: string; // nickname / display name (e.g. "태무산 2인자")
+  nickname: string; // 닉네임 (자기 별명, e.g. "태무산 2인자")
+  statusMessage?: string; // 상태 메시지 (기분, 생각, e.g. "졸업 시러ㅓㅓㅓㅓ")
   passwordHash: string; // default "1234"
   role: UserRole;
   points: number; // Point/Coin balance (supports minus debt)

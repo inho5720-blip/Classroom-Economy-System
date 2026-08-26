@@ -176,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-sm text-slate-800 truncate">
-                  {currentUser.name}
+                  {currentUser.nickname || currentUser.name}
                 </span>
                 {currentUser.role === 'teacher' ? (
                   <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
@@ -195,8 +195,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span className="text-amber-700 font-medium truncate">
                     {mainTitle.icon} {mainTitle.name}
                   </span>
+                ) : currentUser.statusMessage ? (
+                  <span className="truncate text-[11px] text-slate-600">💬 {currentUser.statusMessage}</span>
                 ) : (
-                  <span>{currentUser.nickname}</span>
+                  <span>#{currentUser.studentNumber || '학생'}</span>
                 )}
               </div>
             </div>

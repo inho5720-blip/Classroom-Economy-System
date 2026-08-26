@@ -92,16 +92,18 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
 
   const [selectedEmoji, setSelectedEmoji] = useState(user.avatarEmoji || '🎓');
   const [selectedColor, setSelectedColor] = useState(user.avatarColor || 'from-amber-400 to-orange-500');
-  const [customName, setCustomName] = useState(user.name || '');
-  const [customNickname, setCustomNickname] = useState(user.nickname || '');
+  const [customNickname, setCustomNickname] = useState(user.nickname || user.name || '');
+  const [customStatusMessage, setCustomStatusMessage] = useState(user.statusMessage || '');
   const [activeTab, setActiveTab] = useState<'presets' | 'objects' | 'background'>('presets');
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    const finalNickname = customNickname.trim() || user.nickname || user.name || '학생';
     updateProfile(user.id, {
-      name: customName.trim() || user.name,
-      nickname: customNickname.trim() || user.nickname,
+      name: finalNickname,
+      nickname: finalNickname,
+      statusMessage: customStatusMessage.trim(),
       avatarEmoji: selectedEmoji,
       avatarColor: selectedColor,
     });
@@ -131,7 +133,7 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
             </div>
             <div>
               <h3 className="font-extrabold text-base text-slate-800">내 프로필 & 캐릭터 꾸미기</h3>
-              <p className="text-xs text-slate-500">이름, 닉네임, 아바타 캐릭터와 색상을 자유롭게 변경하세요!</p>
+              <p className="text-xs text-slate-500">닉네임(자기 별명), 상태 메시지(기분, 생각), 아바타를 자유롭게 변경하세요!</p>
             </div>
           </div>
           <button
@@ -166,15 +168,15 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
                   실시간 미리보기
                 </span>
                 <div className="font-extrabold text-base text-slate-800 mt-1 flex items-center gap-1.5">
-                  <span>{customName.trim() || user.name}</span>
+                  <span>{customNickname.trim() || user.nickname || user.name}</span>
                   {user.studentNumber && (
                     <span className="text-[11px] font-mono text-slate-400">
                       #{user.studentNumber}
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-indigo-700 font-semibold mt-0.5">
-                  별명: {customNickname.trim() || user.nickname}
+                <div className="text-xs text-indigo-700 font-semibold mt-1 bg-indigo-50/80 px-2.5 py-0.5 rounded-lg border border-indigo-100 inline-block">
+                  💬 {customStatusMessage.trim() || user.statusMessage || '상태 메시지가 없습니다.'}
                 </div>
               </div>
             </div>
@@ -189,34 +191,34 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
             </button>
           </div>
 
-          {/* Name & Nickname Edit Form */}
+          {/* Nickname & Status Message Edit Form */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <span>👤 학생 이름</span>
-                <span className="text-[10px] text-amber-700 font-normal">(실제 본명)</span>
+                <span>🏷️ 닉네임</span>
+                <span className="text-[10px] text-amber-700 font-normal">(자기 별명)</span>
               </label>
               <input
                 type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="예: 강민우"
-                maxLength={10}
+                value={customNickname}
+                onChange={(e) => setCustomNickname(e.target.value)}
+                placeholder="예: 태무산 2인자, 멍파치, 포냥 리치"
+                maxLength={15}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 font-bold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 shadow-2xs"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <span>🏷️ 캐릭터 별명 / 닉네임</span>
-                <span className="text-[10px] text-amber-700 font-normal">(학급 호칭)</span>
+                <span>💬 상태 메시지</span>
+                <span className="text-[10px] text-amber-700 font-normal">(기분, 생각)</span>
               </label>
               <input
                 type="text"
-                value={customNickname}
-                onChange={(e) => setCustomNickname(e.target.value)}
-                placeholder="예: 모험왕 민우, 번개 수호자"
-                maxLength={20}
+                value={customStatusMessage}
+                onChange={(e) => setCustomStatusMessage(e.target.value)}
+                placeholder="예: 오늘 하루도 파이팅!, 건강이 최고!"
+                maxLength={30}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 font-bold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 shadow-2xs"
               />
             </div>

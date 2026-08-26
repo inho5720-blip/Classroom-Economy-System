@@ -52,22 +52,28 @@ export async function fetchProfilesFromSupabase(): Promise<Profile[] | null> {
     if (!data || data.length === 0) return null;
 
     // snake_case ➡️ camelCase 변환
-    return data.map((row: any) => ({
-      id: row.id,
-      studentNumber: row.student_number || undefined,
-      name: row.name,
-      nickname: row.nickname,
-      passwordHash: row.password_hash || '1234',
-      role: row.role as 'teacher' | 'student',
-      points: Number(row.points ?? 1000),
-      mainTitleId: row.main_title_id || undefined,
-      avatarEmoji: row.avatar_emoji || (row.role === 'teacher' ? '👨‍🏫' : '🧙‍♂️'),
-      avatarColor: row.avatar_color || 'from-amber-400 to-orange-500',
-      consecutiveSuccessDays: Number(row.consecutive_success_days ?? 0),
-      unspentDays: Number(row.unspent_days ?? 0),
-      createdAt: row.created_at || new Date().toISOString(),
-      updatedAt: row.updated_at || new Date().toISOString(),
-    }));
+    return data.map((row: any) => {
+      const nickname = row.nickname || row.name || '학생';
+      const statusMessage = row.status_message || row.statusMessage || (row.name && row.nickname && row.name !== row.nickname ? row.nickname : '') || '';
+
+      return {
+        id: row.id,
+        studentNumber: row.student_number || undefined,
+        name: nickname,
+        nickname: nickname,
+        statusMessage: statusMessage,
+        passwordHash: row.password_hash || '1234',
+        role: row.role as 'teacher' | 'student',
+        points: Number(row.points ?? 1000),
+        mainTitleId: row.main_title_id || undefined,
+        avatarEmoji: row.avatar_emoji || (row.role === 'teacher' ? '👨‍🏫' : '🧙‍♂️'),
+        avatarColor: row.avatar_color || 'from-amber-400 to-orange-500',
+        consecutiveSuccessDays: Number(row.consecutive_success_days ?? 0),
+        unspentDays: Number(row.unspent_days ?? 0),
+        createdAt: row.created_at || new Date().toISOString(),
+        updatedAt: row.updated_at || new Date().toISOString(),
+      };
+    });
   } catch (err) {
     console.warn('[Supabase] Error connecting to DB:', err);
     return null;
@@ -148,8 +154,12 @@ export async function updateProfileInSupabase(
       updated_at: new Date().toISOString(),
     };
 
-    if (updates.name !== undefined) dbPayload.name = updates.name;
-    if (updates.nickname !== undefined) dbPayload.nickname = updates.nickname;
+    if (updates.nickname !== undefined || updates.name !== undefined) {
+      dbPayload.nickname = updates.nickname || updates.name;
+    }
+    if (updates.statusMessage !== undefined) {
+      dbPayload.status_message = updates.statusMessage;
+    }
     if (updates.studentNumber !== undefined) dbPayload.student_number = updates.studentNumber;
     if (updates.passwordHash !== undefined) dbPayload.password_hash = updates.passwordHash;
     if (updates.points !== undefined) dbPayload.points = updates.points;
@@ -163,6 +173,19 @@ export async function updateProfileInSupabase(
     const { error } = await supabase.from('profiles').update(dbPayload).eq('id', userId);
 
     if (error) {
+      // Fallback in case columns are in legacy format (name, nickname) before user runs migration
+      if (error.message.includes('status_message') || error.message.includes('column')) {
+        const legacyPayload: Record<string, any> = { ...dbPayload };
+        delete legacyPayload.status_message;
+        if (updates.name !== undefined || updates.nickname !== undefined) {
+          legacyPayload.name = updates.nickname || updates.name;
+        }
+        if (updates.statusMessage !== undefined) {
+          legacyPayload.nickname = updates.statusMessage;
+        }
+        const { error: legacyError } = await supabase.from('profiles').update(legacyPayload).eq('id', userId);
+        if (!legacyError) return true;
+      }
       console.warn('[Supabase] Profile update failed:', error.message);
       return false;
     }

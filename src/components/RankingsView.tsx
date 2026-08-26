@@ -186,9 +186,11 @@ export const RankingsView: React.FC = () => {
                   {sortedStudents[1].avatarEmoji}
                 </div>
                 <div className="font-bold text-sm text-slate-800">
-                  {sortedStudents[1].name} #{sortedStudents[1].studentNumber}
+                  {sortedStudents[1].nickname || sortedStudents[1].name} #{sortedStudents[1].studentNumber}
                 </div>
-                <div className="text-xs text-slate-500">{sortedStudents[1].nickname}</div>
+                {sortedStudents[1].statusMessage && (
+                  <div className="text-xs text-slate-500 truncate max-w-[140px] mx-auto mt-0.5">💬 {sortedStudents[1].statusMessage}</div>
+                )}
                 {(() => {
                   const sStats = stats[sortedStudents[1].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[1].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
@@ -220,11 +222,17 @@ export const RankingsView: React.FC = () => {
                   {sortedStudents[0].avatarEmoji}
                 </div>
                 <div className="font-bold text-base text-slate-900">
-                  {sortedStudents[0].name} #{sortedStudents[0].studentNumber}
+                  {sortedStudents[0].nickname || sortedStudents[0].name} #{sortedStudents[0].studentNumber}
                 </div>
-                <div className="text-xs font-bold text-amber-700 mt-0.5">
-                  {titles.find((t) => t.id === sortedStudents[0].mainTitleId)?.name || '학급 대표 모험가'}
-                </div>
+                {sortedStudents[0].statusMessage ? (
+                  <div className="text-xs text-indigo-700 font-semibold mt-0.5 truncate max-w-[160px] mx-auto">
+                    💬 {sortedStudents[0].statusMessage}
+                  </div>
+                ) : (
+                  <div className="text-xs font-bold text-amber-700 mt-0.5">
+                    {titles.find((t) => t.id === sortedStudents[0].mainTitleId)?.name || '학급 대표 모험가'}
+                  </div>
+                )}
                 {(() => {
                   const sStats = stats[sortedStudents[0].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[0].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
@@ -256,9 +264,11 @@ export const RankingsView: React.FC = () => {
                   {sortedStudents[2].avatarEmoji}
                 </div>
                 <div className="font-bold text-sm text-slate-800">
-                  {sortedStudents[2].name} #{sortedStudents[2].studentNumber}
+                  {sortedStudents[2].nickname || sortedStudents[2].name} #{sortedStudents[2].studentNumber}
                 </div>
-                <div className="text-xs text-slate-500">{sortedStudents[2].nickname}</div>
+                {sortedStudents[2].statusMessage && (
+                  <div className="text-xs text-slate-500 truncate max-w-[140px] mx-auto mt-0.5">💬 {sortedStudents[2].statusMessage}</div>
+                )}
                 {(() => {
                   const sStats = stats[sortedStudents[2].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[2].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
@@ -307,11 +317,16 @@ export const RankingsView: React.FC = () => {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-sm text-slate-800 truncate">
-                        {student.name}
+                        {student.nickname || student.name}
                       </span>
                       {student.studentNumber && (
                         <span className="text-[10px] font-mono text-slate-500">
                           #{student.studentNumber}
+                        </span>
+                      )}
+                      {student.statusMessage && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/80 truncate max-w-[150px]">
+                          💬 {student.statusMessage}
                         </span>
                       )}
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${rInfo.badgeBg} ${rInfo.badgeTextColor} font-bold inline-flex items-center gap-0.5 whitespace-nowrap`}>

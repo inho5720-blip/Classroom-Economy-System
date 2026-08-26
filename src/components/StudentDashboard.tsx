@@ -195,24 +195,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
             <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-850 tracking-tight">
-                  {currentUser.name}
+                  {currentUser.nickname || currentUser.name}
                 </h1>
                 {currentUser.studentNumber && (
                   <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 shadow-2xs">
                     #{currentUser.studentNumber}
                   </span>
                 )}
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-semibold border border-indigo-200">
-                  {currentUser.nickname}
-                </span>
+                {currentUser.statusMessage && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-medium border border-indigo-200/80">
+                    💬 {currentUser.statusMessage}
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsCustomizerOpen(true)}
                   className="px-2.5 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                  title="이름, 닉네임(별명), 캐릭터 아바타 변경"
+                  title="닉네임(별명), 상태 메시지, 캐릭터 아바타 변경"
                 >
                   <Palette className="w-3 h-3 text-amber-700" />
-                  <span>이름·별명·캐릭터 수정</span>
+                  <span>닉네임·상태메시지 수정</span>
                 </button>
               </div>
 
