@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ShieldAlert,
   CheckCircle,
@@ -22,6 +22,12 @@ import {
   Package,
   Home,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Search,
+  CalendarDays,
+  CheckCheck,
   RotateCw,
   UserCheck,
   CheckSquare,
@@ -35,7 +41,7 @@ import {
   Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Job, Quest, AuctionItem, ShopItem, TaxSetting, QuestFrequencyType, QuestTargetType, StatKey } from '../types';
+import { Job, Quest, QuestLog, AuctionItem, ShopItem, TaxSetting, QuestFrequencyType, QuestTargetType, StatKey } from '../types';
 import { TeacherSeatManagement } from './TeacherSeatManagement';
 import { JobEmojiSelector } from './JobEmojiSelector';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -216,6 +222,15 @@ export const TeacherAdminView: React.FC = () => {
   }, 0);
   const students = users.filter((u) => u.role === 'student');
 
+  // 📋 퀘스트 승인 대기열 필터링 & 캘린더 상태
+  type ApprovalCategoryFilter = 'all' | 'job' | 'homework' | 'reading' | 'special';
+  const [approvalCategoryFilter, setApprovalCategoryFilter] = useState<ApprovalCategoryFilter>('all');
+  const [approvalSelectedDate, setApprovalSelectedDate] = useState<string | null>(null); // 'YYYY-MM-DD' or null (전체)
+  const [approvalSearchStudent, setApprovalSearchStudent] = useState<string>('');
+  const [approvalSelectedLogIds, setApprovalSelectedLogIds] = useState<string[]>([]);
+  const [calendarViewMonth, setCalendarViewMonth] = useState<Date>(new Date());
+  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
+
   const handleApprove = (logId: string) => {
     approveQuestLog(logId, currentUser.id);
     showToast(
@@ -234,6 +249,24 @@ export const TeacherAdminView: React.FC = () => {
   const handleQuickReject = (logId: string) => {
     rejectQuestLog(logId, currentUser.id, '');
     showToast('퀘스트가 사유 없이 즉시 반려 처리되었습니다.');
+  };
+
+  const handleBulkApproveFiltered = (targetLogs: QuestLog[]) => {
+    if (targetLogs.length === 0) return;
+    targetLogs.forEach((log) => {
+      approveQuestLog(log.id, currentUser.id);
+    });
+    setApprovalSelectedLogIds([]);
+    showToast(`총 ${targetLogs.length}건의 퀘스트가 일괄 승인되었습니다!`);
+  };
+
+  const handleBulkRejectFiltered = (targetLogs: QuestLog[]) => {
+    if (targetLogs.length === 0) return;
+    targetLogs.forEach((log) => {
+      rejectQuestLog(log.id, currentUser.id, '');
+    });
+    setApprovalSelectedLogIds([]);
+    showToast(`총 ${targetLogs.length}건의 퀘스트가 일괄 반려되었습니다.`);
   };
 
   const handleBulkSalary = () => {
@@ -661,139 +694,693 @@ export const TeacherAdminView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-base text-slate-850">
-                학생 제출 퀘스트 승인 & 반려 대기열
-              </h3>
-              <span className="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                {pendingLogs.length}건 대기 중
-              </span>
-            </div>
+          {/* 🌟 REORGANIZED QUEST APPROVAL QUEUE: CATEGORIZED & DATE-FILTERED WITH MINI-CALENDAR */}
+          {(() => {
+            // 날짜별 펜딩 건수 맵
+            const pendingByDateMap: Record<string, number> = {};
+            pendingLogs.forEach((l) => {
+              const d = l.targetDate || l.completedAt?.split('T')[0] || '미지정';
+              pendingByDateMap[d] = (pendingByDateMap[d] || 0) + 1;
+            });
 
-          {pendingLogs.length > 0 ? (
-            <div className="space-y-3">
-              {pendingLogs.map((log) => {
-                const student = users.find((u) => u.id === log.userId);
-                const quest = quests.find((q) => q.id === log.questId);
-                const dynamicReward = quest
-                  ? getQuestRewardForStudent(quest, log.userId, jobs, studentJobs)
-                  : 0;
+            // 퀘스트 종류(job, homework, reading, special) 정밀 판별 헬퍼
+            const getQuestTypeForLog = (log: (typeof pendingLogs)[0]): 'job' | 'homework' | 'reading' | 'special' => {
+              const q = quests.find((item) => item.id === log.questId);
+              if (!q) return 'homework';
+              if (q.questType === 'job' || !!q.targetJobId) return 'job';
+              if (q.questType === 'reading') return 'reading';
+              if (q.questType === 'special') return 'special';
+              return 'homework';
+            };
 
-                return (
-                  <div
-                    key={log.id}
-                    className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                  >
-                    <div className="flex items-start gap-3.5 min-w-0">
-                      <div className="w-11 h-11 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
-                        {quest?.icon || '📝'}
-                      </div>
-                      <div>
+            // 필터링 적용 (퀘스트 유형, 수행 날짜, 학생명 검색)
+            const filteredPendingLogs = pendingLogs.filter((log) => {
+              const quest = quests.find((q) => q.id === log.questId);
+              const student = users.find((u) => u.id === log.userId);
+
+              // 1. 카테고리 필터
+              if (approvalCategoryFilter !== 'all') {
+                const logType = getQuestTypeForLog(log);
+                if (logType !== approvalCategoryFilter) {
+                  return false;
+                }
+              }
+
+              // 2. 날짜 필터
+              if (approvalSelectedDate) {
+                const logDate = log.targetDate || log.completedAt?.split('T')[0];
+                if (logDate !== approvalSelectedDate) {
+                  return false;
+                }
+              }
+
+              // 3. 학생 검색 필터
+              if (approvalSearchStudent.trim()) {
+                const query = approvalSearchStudent.trim().toLowerCase();
+                const studentName = (student?.name || '').toLowerCase();
+                const studentNum = (student?.studentNumber || '').toLowerCase();
+                const studentNickname = (student?.nickname || '').toLowerCase();
+                const questTitle = (quest?.title || '').toLowerCase();
+                if (
+                  !studentName.includes(query) &&
+                  !studentNum.includes(query) &&
+                  !studentNickname.includes(query) &&
+                  !questTitle.includes(query)
+                ) {
+                  return false;
+                }
+              }
+
+              return true;
+            });
+
+            // 캘린더 날짜 계산 헬퍼
+            const currentYear = calendarViewMonth.getFullYear();
+            const currentMonth = calendarViewMonth.getMonth();
+            const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sun
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const monthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            const monthPendingCount = Object.entries(pendingByDateMap).reduce((acc, [date, cnt]) => {
+              if (date.startsWith(monthStr)) return acc + cnt;
+              return acc;
+            }, 0);
+
+            // 퀘스트 종류별 대기 건수 집계
+            const categoryCounts: Record<ApprovalCategoryFilter, number> = {
+              all: pendingLogs.length,
+              job: 0,
+              homework: 0,
+              reading: 0,
+              special: 0,
+            };
+            pendingLogs.forEach((log) => {
+              const type = getQuestTypeForLog(log);
+              if (categoryCounts[type] !== undefined) {
+                categoryCounts[type]++;
+              }
+            });
+
+            const categoryTabs: { id: ApprovalCategoryFilter; label: string; icon: string; count: number }[] = [
+              { id: 'all', label: '전체 보기', icon: '📋', count: categoryCounts.all },
+              { id: 'job', label: '1인 1역 주간 직업', icon: '💼', count: categoryCounts.job },
+              { id: 'homework', label: '일일 과제 & 숙제', icon: '📝', count: categoryCounts.homework },
+              { id: 'reading', label: '독서 & 학습 습관', icon: '📖', count: categoryCounts.reading },
+              { id: 'special', label: '특별 & 도전 퀘스트', icon: '🌟', count: categoryCounts.special },
+            ];
+
+            const isAllFilteredSelected =
+              filteredPendingLogs.length > 0 &&
+              filteredPendingLogs.every((l) => approvalSelectedLogIds.includes(l.id));
+
+            const toggleSelectAll = () => {
+              if (isAllFilteredSelected) {
+                setApprovalSelectedLogIds([]);
+              } else {
+                setApprovalSelectedLogIds(filteredPendingLogs.map((l) => l.id));
+              }
+            };
+
+            const toggleSelectLog = (id: string) => {
+              setApprovalSelectedLogIds((prev) =>
+                prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+              );
+            };
+
+            const selectedLogsList = filteredPendingLogs.filter((l) =>
+              approvalSelectedLogIds.includes(l.id)
+            );
+
+            return (
+              <div className="space-y-4">
+                {/* 1. 상단 안내 및 종합 현황 요약 카드 */}
+                <div className="bg-gradient-to-br from-indigo-50/90 via-sky-50/60 to-purple-50/70 border border-indigo-200 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1.5 max-w-2xl">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">💡</span>
+                      <h4 className="font-bold text-sm sm:text-base text-indigo-950">
+                        퀘스트 승인 및 주급 정산 프로세스 안내
+                      </h4>
+                    </div>
+                    <p className="text-xs text-indigo-900/90 leading-relaxed">
+                      • <strong>스탯(능력치) 즉시 부여</strong>: 퀘스트를 승인하면 지혜, 성실 등의 스탯이 즉시 학생에게 지급됩니다.<br />
+                      • <strong>포인트 주급 적립</strong>: 승인된 포인트는 학생의 [예상 주급]으로 적립되며, <strong>[주급 일괄 지급 & 세금 자동 정산]</strong> 시 세금을 공제한 실수령액이 일괄 지급됩니다.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+                    <div className="px-4 py-2.5 rounded-2xl bg-white border border-indigo-200 text-center shadow-2xs">
+                      <span className="text-[10px] text-slate-500 font-bold block">정산 대기 승인 퀘스트</span>
+                      <span className="font-mono font-black text-indigo-700 text-sm">
+                        {unpaidApprovedLogs.length}건 ({unpaidApprovedPoints.toLocaleString()}P)
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={handleBulkSalary}
+                      className="px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Coins className="w-4 h-4 text-emerald-200" />
+                      <span>주급 일괄 지급 & 세금 자동 정산</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. 대기열 메인 컨테이너: 좌측 캘린더/날짜 필터 + 우측 분류별 퀘스트 리스트 */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  {/* 좌측: 조그만 달력 및 날짜별 필터 위젯 (4 Cols) */}
+                  <div className="lg:col-span-4 space-y-4">
+                    {/* 미니 캘린더 카드 */}
+                    <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-800">
-                            {student?.name} ({student?.studentNumber})
-                          </span>
-                          <span className="text-xs text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-md">
-                            [{quest?.title}]
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200/70">
-                            +{dynamicReward}P 주급 적립 예정
-                          </span>
-                          <span className="text-[11px] text-slate-400">수행일: {log.targetDate}</span>
+                          <CalendarDays className="w-4 h-4 text-indigo-600" />
+                          <h4 className="font-extrabold text-sm text-slate-850">
+                            {currentYear}년 {currentMonth + 1}월 대기 현황
+                          </h4>
                         </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() =>
+                              setCalendarViewMonth(
+                                new Date(currentYear, currentMonth - 1, 1)
+                              )
+                            }
+                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition cursor-pointer"
+                            title="이전 달"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCalendarViewMonth(
+                                new Date(currentYear, currentMonth + 1, 1)
+                              )
+                            }
+                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition cursor-pointer"
+                            title="다음 달"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
 
-                        {log.studentMemo && (
-                          <div className="text-xs text-indigo-900 mt-1.5 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 font-medium">
-                            💬 학생 메모: "{log.studentMemo}"
-                          </div>
+                      {/* 요일 헤더 */}
+                      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 pb-1 border-b border-slate-100">
+                        <span className="text-rose-500">일</span>
+                        <span>월</span>
+                        <span>화</span>
+                        <span>수</span>
+                        <span>목</span>
+                        <span>금</span>
+                        <span className="text-blue-500">토</span>
+                      </div>
+
+                      {/* 달력 날짜 그리드 */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                          <div key={`empty-${i}`} className="h-9" />
+                        ))}
+                        {Array.from({ length: daysInMonth }).map((_, i) => {
+                          const day = i + 1;
+                          const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const count = pendingByDateMap[dateStr] || 0;
+                          const isSelected = approvalSelectedDate === dateStr;
+                          const isToday = getTodayDateStr() === dateStr;
+
+                          return (
+                            <button
+                              key={dateStr}
+                              onClick={() => {
+                                if (approvalSelectedDate === dateStr) {
+                                  setApprovalSelectedDate(null); // 토글 해제
+                                } else {
+                                  setApprovalSelectedDate(dateStr);
+                                }
+                              }}
+                              className={`h-9 rounded-xl flex flex-col items-center justify-center relative transition cursor-pointer ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white font-black shadow-xs ring-2 ring-indigo-300'
+                                  : count > 0
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-slate-800 font-bold border border-amber-200'
+                                  : 'hover:bg-slate-100 text-slate-700'
+                              }`}
+                              title={`${dateStr}: ${count}건 대기 중`}
+                            >
+                              <span className={`text-xs ${isToday && !isSelected ? 'font-black text-indigo-600 underline underline-offset-2' : ''}`}>
+                                {day}
+                              </span>
+                              {count > 0 && (
+                                <span
+                                  className={`text-[9px] leading-none px-1 rounded-full font-black ${
+                                    isSelected
+                                      ? 'bg-white text-indigo-700'
+                                      : 'bg-amber-500 text-white'
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* 날짜 선택 필터 바 */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-slate-500 font-medium">선택 날짜:</span>
+                          <span className="font-bold text-slate-800">
+                            {approvalSelectedDate ? `${approvalSelectedDate} (${pendingByDateMap[approvalSelectedDate] || 0}건)` : '모든 날짜'}
+                          </span>
+                        </div>
+                        {approvalSelectedDate && (
+                          <button
+                            onClick={() => setApprovalSelectedDate(null)}
+                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                          >
+                            전체 날짜 보기
+                          </button>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                      <button
-                        onClick={() => handleQuickReject(log.id)}
-                        className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 font-bold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                        title="사유 입력 없이 바로 반려"
-                      >
-                        <XCircle className="w-3.5 h-3.5 text-rose-500" /> 즉시 반려
-                      </button>
-                      <button
-                        onClick={() => {
-                          setRejectingLogId(log.id);
-                          setRejectReasonInput('');
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                        title="사유를 작성하여 반려 (사유는 선택 사항)"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 text-slate-500" /> 사유 작성 반려
-                      </button>
-                      <button
-                        onClick={() => handleApprove(log.id)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                        title="승인 시 스탯은 즉시 지급되며 포인트는 주급 정산 시 지급됩니다"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" /> 승인 (+{dynamicReward}P 주급 적립)
-                      </button>
+                    {/* 날짜별 대기 건수 요약 리스트 */}
+                    <div className="bg-white border border-slate-200/80 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-extrabold text-xs text-slate-700 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>날짜별 대기 큐</span>
+                        </h4>
+                        <span className="text-[11px] font-bold text-slate-500">
+                          총 {pendingLogs.length}건
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        <button
+                          onClick={() => setApprovalSelectedDate(null)}
+                          className={`w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer border ${
+                            approvalSelectedDate === null
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-extrabold'
+                              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 font-medium'
+                          }`}
+                        >
+                          <span>📅 전체 날짜 일괄 보기</span>
+                          <span className="font-mono font-bold bg-white px-2 py-0.5 rounded-md border text-slate-700">
+                            {pendingLogs.length}건
+                          </span>
+                        </button>
+
+                        {Object.entries(pendingByDateMap)
+                          .sort(([a], [b]) => b.localeCompare(a))
+                          .map(([dateStr, count]) => {
+                            const isSelected = approvalSelectedDate === dateStr;
+                            return (
+                              <button
+                                key={dateStr}
+                                onClick={() => setApprovalSelectedDate(dateStr)}
+                                className={`w-full px-3 py-2 rounded-xl text-xs flex items-center justify-between transition cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-indigo-600 border-indigo-600 text-white font-extrabold shadow-xs'
+                                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 font-medium'
+                                }`}
+                              >
+                                <span>{dateStr}</span>
+                                <span
+                                  className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                                    isSelected
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-amber-100 text-amber-900 font-extrabold'
+                                  }`}
+                                >
+                                  {count}건 대기
+                                </span>
+                              </button>
+                            );
+                          })}
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-xs text-slate-400 space-y-2">
-              <div className="text-4xl">🎉</div>
-              <div className="font-bold text-slate-750 text-sm">승인 대기 중인 퀘스트가 없습니다!</div>
-              <p>모든 학생의 숙제 및 직업 수행 검토가 완료되었습니다.</p>
-            </div>
-          )}
 
-          {/* Rejection Dialog */}
-          {rejectingLogId && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-              <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-rose-700 font-bold text-sm">
-                    <XCircle className="w-4 h-4" /> 퀘스트 반려 처리
+                  {/* 우측: 퀘스트 종류별 탭 + 검색 + 일괄 승인/반려 + 대기열 목록 (8 Cols) */}
+                  <div className="lg:col-span-8 space-y-4">
+                    {/* 퀘스트 종류별 분류 탭 및 드롭다운 필터 */}
+                    <div className="bg-white border border-slate-200/80 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
+                      {/* 드롭다운 필터 + 좌우 스크롤 제어 헤더 */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <Filter className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span className="text-xs font-extrabold text-slate-700 whitespace-nowrap">퀘스트 종류:</span>
+                          <div className="relative flex-1 sm:w-64">
+                            <select
+                              value={approvalCategoryFilter}
+                              onChange={(e) => setApprovalCategoryFilter(e.target.value as ApprovalCategoryFilter)}
+                              className="w-full pl-3 pr-8 py-1.5 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer appearance-none"
+                            >
+                              {categoryTabs.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.icon} {cat.label} ({cat.count}건)
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-indigo-600 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          </div>
+                        </div>
+
+                        {/* 빠른 전체 보기 및 좌우 탭 스크롤 버튼 */}
+                        <div className="flex items-center justify-end gap-1.5">
+                          {approvalCategoryFilter !== 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => setApprovalCategoryFilter('all')}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition cursor-pointer"
+                            >
+                              전체 해제
+                            </button>
+                          )}
+                          <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (categoryScrollRef.current) {
+                                  categoryScrollRef.current.scrollBy({ left: -160, behavior: 'smooth' });
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                              title="탭 왼쪽으로 넘기기"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (categoryScrollRef.current) {
+                                  categoryScrollRef.current.scrollBy({ left: 160, behavior: 'smooth' });
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                              title="탭 오른쪽으로 넘기기"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 가로 스크롤 탭 바 (모바일 및 데스크톱 모두 짤림 없이 부드럽게 스크롤 가능) */}
+                      <div
+                        ref={categoryScrollRef}
+                        className="flex items-center gap-2 overflow-x-auto pb-1.5 scroll-smooth scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
+                      >
+                        {categoryTabs.map((cat) => {
+                          const isActive = approvalCategoryFilter === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => setApprovalCategoryFilter(cat.id)}
+                              className={`px-3 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 cursor-pointer shrink-0 border ${
+                                isActive
+                                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-200'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                              }`}
+                            >
+                              <span>{cat.icon}</span>
+                              <span>{cat.label}</span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                                  isActive
+                                    ? 'bg-white/25 text-white'
+                                    : cat.count > 0
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-200 font-extrabold'
+                                    : 'bg-slate-200/80 text-slate-500'
+                                }`}
+                              >
+                                {cat.count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* 검색 바 & 빠른 일괄 처리 도구 모음 */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+                        <div className="relative flex-1">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            placeholder="학생 이름, 번호, 퀘스트명 검색..."
+                            value={approvalSearchStudent}
+                            onChange={(e) => setApprovalSearchStudent(e.target.value)}
+                            className="w-full pl-8.5 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition"
+                          />
+                          {approvalSearchStudent && (
+                            <button
+                              onClick={() => setApprovalSearchStudent('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 전체 선택 및 일괄 처리 버튼 */}
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-between sm:justify-end">
+                          <button
+                            onClick={toggleSelectAll}
+                            disabled={filteredPendingLogs.length === 0}
+                            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                          >
+                            {isAllFilteredSelected ? (
+                              <CheckSquare className="w-3.5 h-3.5 text-indigo-600" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5 text-slate-400" />
+                            )}
+                            <span>
+                              {isAllFilteredSelected ? '선택 해제' : '현재 목록 전체 선택'}
+                            </span>
+                          </button>
+
+                          {approvalSelectedLogIds.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => handleBulkApproveFiltered(selectedLogsList)}
+                                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <CheckCheck className="w-3.5 h-3.5" />
+                                <span>선택 {approvalSelectedLogIds.length}건 일괄 승인</span>
+                              </button>
+                              <button
+                                onClick={() => handleBulkRejectFiltered(selectedLogsList)}
+                                className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                <span>일괄 반려</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 대기열 리스트 카드 */}
+                    <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-extrabold text-base text-slate-850">
+                            대기 중인 퀘스트 제출 목록
+                          </h3>
+                          {approvalSelectedDate && (
+                            <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs border border-indigo-200">
+                              📅 {approvalSelectedDate}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {filteredPendingLogs.length > 0 && (
+                            <button
+                              onClick={() => handleBulkApproveFiltered(filteredPendingLogs)}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                              title="현재 필터된 모든 퀘스트를 즉시 승인합니다"
+                            >
+                              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>필터 목록 ({filteredPendingLogs.length}건) 전체 승인</span>
+                            </button>
+                          )}
+                          <span className="text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                            {filteredPendingLogs.length} / 총 {pendingLogs.length}건
+                          </span>
+                        </div>
+                      </div>
+
+                      {filteredPendingLogs.length > 0 ? (
+                        <div className="space-y-3">
+                          {filteredPendingLogs.map((log) => {
+                            const student = users.find((u) => u.id === log.userId);
+                            const quest = quests.find((q) => q.id === log.questId);
+                            const dynamicReward = quest
+                              ? getQuestRewardForStudent(quest, log.userId, jobs, studentJobs)
+                              : 0;
+                            const isSelected = approvalSelectedLogIds.includes(log.id);
+
+                            return (
+                              <div
+                                key={log.id}
+                                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                                  isSelected
+                                    ? 'bg-indigo-50/50 border-indigo-300 ring-2 ring-indigo-200'
+                                    : 'bg-slate-50/80 border-slate-200/80 hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                              >
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  {/* 체크박스 */}
+                                  <button
+                                    onClick={() => toggleSelectLog(log.id)}
+                                    className="mt-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-slate-300" />
+                                    )}
+                                  </button>
+
+                                  <div className="w-11 h-11 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
+                                    {quest?.icon || '📝'}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-extrabold text-sm text-slate-800">
+                                        {student?.name || student?.nickname || '학생'}
+                                      </span>
+                                      {student?.studentNumber && (
+                                        <span className="text-xs text-slate-500 font-semibold">
+                                          ({student.studentNumber})
+                                        </span>
+                                      )}
+                                      <span className="text-xs text-amber-900 font-bold bg-amber-100 px-2 py-0.5 rounded-md">
+                                        [{quest?.title || '퀘스트'}]
+                                      </span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200/70">
+                                        +{dynamicReward}P 주급 적립 예정
+                                      </span>
+                                      <span className="text-[11px] text-slate-400 font-medium">
+                                        수행일: {log.targetDate || log.completedAt?.split('T')[0]}
+                                      </span>
+                                    </div>
+
+                                    {log.studentMemo && (
+                                      <div className="text-xs text-indigo-900 mt-1.5 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 font-medium">
+                                        💬 학생 메모: "{log.studentMemo}"
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
+                                  <button
+                                    onClick={() => handleQuickReject(log.id)}
+                                    className="px-2.5 py-2 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 font-bold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                    title="사유 입력 없이 바로 반려"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 text-rose-500" /> 즉시 반려
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRejectingLogId(log.id);
+                                      setRejectReasonInput('');
+                                    }}
+                                    className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                    title="사유를 작성하여 반려 (사유는 선택 사항)"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-slate-500" /> 사유 반려
+                                  </button>
+                                  <button
+                                    onClick={() => handleApprove(log.id)}
+                                    className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                                    title="승인 시 스탯은 즉시 지급되며 포인트는 주급 정산 시 지급됩니다"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" /> 승인 (+{dynamicReward}P)
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-xs text-slate-400 space-y-2">
+                          <div className="text-4xl">🎉</div>
+                          <div className="font-bold text-slate-750 text-sm">
+                            {pendingLogs.length === 0
+                              ? '승인 대기 중인 퀘스트가 없습니다!'
+                              : '선택한 필터 조건에 해당하는 대기 퀘스트가 없습니다.'}
+                          </div>
+                          <p>
+                            {pendingLogs.length === 0
+                              ? '모든 학생의 숙제 및 직업 수행 검토가 완료되었습니다.'
+                              : '다른 분류 탭을 누르거나 날짜 필터를 전체로 변경해 보세요.'}
+                          </p>
+                          {approvalSelectedDate && (
+                            <button
+                              onClick={() => setApprovalSelectedDate(null)}
+                              className="mt-2 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 font-bold text-xs hover:bg-indigo-100 transition cursor-pointer"
+                            >
+                              전체 날짜 보기
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                    사유 입력 선택 사항
-                  </span>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  반려 시 포인트는 미지급됩니다. 사유를 적지 않고 <strong>[반려 확정]</strong>을 눌러도 바로 반려 처리됩니다.
-                </p>
-                <textarea
-                  rows={3}
-                  placeholder="(선택 사항) 학생에게 전달할 피드백이 있다면 입력하세요. 비워두어도 반려 가능합니다."
-                  value={rejectReasonInput}
-                  onChange={(e) => setRejectReasonInput(e.target.value)}
-                  className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-rose-400 shadow-2xs"
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setRejectingLogId(null);
-                      setRejectReasonInput('');
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 cursor-pointer"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleReject}
-                    className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-sm"
-                  >
-                    반려 확정
-                  </button>
-                </div>
+
+                {/* 반려 모달 */}
+                {rejectingLogId && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+                    <div className="w-full max-w-md bg-white border border-rose-200 rounded-3xl p-6 shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-rose-700 font-bold text-sm">
+                          <XCircle className="w-4 h-4" /> 퀘스트 반려 처리
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          사유 입력 선택 사항
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        반려 시 포인트는 미지급됩니다. 사유를 적지 않고 <strong>[반려 확정]</strong>을 눌러도 바로 반려 처리됩니다.
+                      </p>
+                      <textarea
+                        rows={3}
+                        placeholder="(선택 사항) 학생에게 전달할 피드백이 있다면 입력하세요. 비워두어도 반려 가능합니다."
+                        value={rejectReasonInput}
+                        onChange={(e) => setRejectReasonInput(e.target.value)}
+                        className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-rose-400 shadow-2xs"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setRejectingLogId(null);
+                            setRejectReasonInput('');
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs hover:bg-slate-200 cursor-pointer"
+                        >
+                          취소
+                        </button>
+                        <button
+                          onClick={handleReject}
+                          className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-sm"
+                        >
+                          반려 확정
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
-      </div>
-    )}
+      )}
 
       {/* SUB TAB: SHOP ITEMS MANAGEMENT (ADD / EDIT / STOCK / DELETE) */}
       {activeAdminSubTab === 'shop_items' && (

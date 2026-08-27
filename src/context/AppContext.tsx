@@ -648,8 +648,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setJobApplications(cloudJobApps);
         }
 
-        // 💼 학생 직업 배정 동기화
-        if (cloudStudentJobs !== null && cloudStudentJobs.length > 0) {
+        // 💼 학생 직업 배정 동기화 (DB가 비어있으면 []로 확실히 동기화)
+        if (cloudStudentJobs !== null) {
           console.log(`[Supabase] Successfully loaded ${cloudStudentJobs.length} student job assignments from DB.`);
           setStudentJobs(cloudStudentJobs);
         }
@@ -759,6 +759,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .channel('public:classroom_realtime')
         .on(
           'postgres_changes',
+          { event: '*', schema: 'public', table: 'jobs' },
+          async () => {
+            const freshJobs = await fetchJobsFromSupabase();
+            if (freshJobs !== null && isMounted) {
+              setJobs(freshJobs);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: 'job_applications' },
           async () => {
             const freshApps = await fetchJobApplicationsFromSupabase();
@@ -785,6 +795,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (freshLedger !== null && isMounted) {
               const sorted = [...freshLedger].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
               setPointLedger(sorted);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'student_stats' },
+          async () => {
+            const freshStats = await fetchStatsFromSupabase();
+            if (freshStats && Object.keys(freshStats).length > 0 && isMounted) {
+              setStats((prev) => ({ ...prev, ...freshStats }));
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'seats' },
+          async () => {
+            const freshSeats = await fetchSeatsFromSupabase();
+            if (freshSeats !== null && isMounted) {
+              setSeats(freshSeats);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'shop_items' },
+          async () => {
+            const freshItems = await fetchShopItemsFromSupabase();
+            if (freshItems !== null && isMounted) {
+              setShopItems(freshItems);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'shop_orders' },
+          async () => {
+            const freshOrders = await fetchShopOrdersFromSupabase();
+            if (freshOrders !== null && isMounted) {
+              setShopOrders(freshOrders);
             }
           }
         )
@@ -1088,11 +1138,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newStudents.push(newStudent);
       newStatsMap[id] = {
         userId: id,
-        diligence: 10,
-        frugality: 10,
-        contribution: 10,
-        wisdom: 10,
-        credit: 10,
+        diligence: 1,
+        frugality: 1,
+        contribution: 1,
+        wisdom: 1,
+        credit: 1,
       };
 
       nextNumber++;
@@ -1582,14 +1632,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStats((prev) => {
         const current = prev[log.userId] || {
           userId: log.userId,
-          diligence: 10,
-          frugality: 10,
-          contribution: 10,
-          wisdom: 10,
-          credit: 10,
+          diligence: 1,
+          frugality: 1,
+          contribution: 1,
+          wisdom: 1,
+          credit: 1,
         };
 
-        const currentVal = current[statType] ?? 10;
+        const currentVal = current[statType] ?? 1;
         const newVal = Math.min(100, Math.max(0, currentVal + statAmount));
         const updated = { ...current, [statType]: newVal };
 
@@ -2544,11 +2594,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStats((prev) => {
       const current = prev[userId] || {
         userId,
-        diligence: 10,
-        frugality: 10,
-        contribution: 10,
-        wisdom: 10,
-        credit: 10,
+        diligence: 1,
+        frugality: 1,
+        contribution: 1,
+        wisdom: 1,
+        credit: 1,
       };
 
       const clamped: Partial<Omit<StudentStats, 'userId'>> = {};

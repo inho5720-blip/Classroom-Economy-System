@@ -192,7 +192,7 @@ export const RankingsView: React.FC = () => {
                   <div className="text-xs text-slate-500 truncate max-w-[140px] mx-auto mt-0.5">💬 {sortedStudents[1].statusMessage}</div>
                 )}
                 {(() => {
-                  const sStats = stats[sortedStudents[1].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[1].id };
+                  const sStats = stats[sortedStudents[1].id] || { diligence: 1, frugality: 1, contribution: 1, wisdom: 1, credit: 1, userId: sortedStudents[1].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
                   return (
                     <div className="mt-1">
@@ -234,7 +234,7 @@ export const RankingsView: React.FC = () => {
                   </div>
                 )}
                 {(() => {
-                  const sStats = stats[sortedStudents[0].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[0].id };
+                  const sStats = stats[sortedStudents[0].id] || { diligence: 1, frugality: 1, contribution: 1, wisdom: 1, credit: 1, userId: sortedStudents[0].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
                   return (
                     <div className="mt-1">
@@ -270,7 +270,7 @@ export const RankingsView: React.FC = () => {
                   <div className="text-xs text-slate-500 truncate max-w-[140px] mx-auto mt-0.5">💬 {sortedStudents[2].statusMessage}</div>
                 )}
                 {(() => {
-                  const sStats = stats[sortedStudents[2].id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: sortedStudents[2].id };
+                  const sStats = stats[sortedStudents[2].id] || { diligence: 1, frugality: 1, contribution: 1, wisdom: 1, credit: 1, userId: sortedStudents[2].id };
                   const rInfo = getRankInfo(getTotalExp(sStats));
                   return (
                     <div className="mt-1">
@@ -297,7 +297,7 @@ export const RankingsView: React.FC = () => {
             const title = titles.find((t) => t.id === student.mainTitleId);
             const statVal =
               rankingType === 'wealth' ? student.points : stats[student.id]?.[rankingType] || 0;
-            const sStats = stats[student.id] || { diligence: 10, frugality: 10, contribution: 10, wisdom: 10, credit: 10, userId: student.id };
+            const sStats = stats[student.id] || { diligence: 1, frugality: 1, contribution: 1, wisdom: 1, credit: 1, userId: student.id };
             const rInfo = getRankInfo(getTotalExp(sStats));
 
             return (

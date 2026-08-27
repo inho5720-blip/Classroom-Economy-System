@@ -64,7 +64,7 @@ export async function fetchProfilesFromSupabase(): Promise<Profile[] | null> {
         statusMessage: statusMessage,
         passwordHash: row.password_hash || '1234',
         role: row.role as 'teacher' | 'student',
-        points: Number(row.points ?? 1000),
+        points: Number(row.points ?? 500),
         mainTitleId: row.main_title_id || undefined,
         avatarEmoji: row.avatar_emoji || (row.role === 'teacher' ? '👨‍🏫' : '🧙‍♂️'),
         avatarColor: row.avatar_color || 'from-amber-400 to-orange-500',
@@ -99,11 +99,11 @@ export async function fetchStatsFromSupabase(): Promise<Record<string, StudentSt
     data.forEach((row: any) => {
       statsMap[row.user_id] = {
         userId: row.user_id,
-        diligence: Number(row.diligence ?? 10),
-        frugality: Number(row.frugality ?? 10),
-        contribution: Number(row.contribution ?? 10),
-        wisdom: Number(row.wisdom ?? 10),
-        credit: Number(row.credit ?? 10),
+        diligence: Number(row.diligence ?? 1),
+        frugality: Number(row.frugality ?? 1),
+        contribution: Number(row.contribution ?? 1),
+        wisdom: Number(row.wisdom ?? 1),
+        credit: Number(row.credit ?? 1),
       };
     });
     return statsMap;

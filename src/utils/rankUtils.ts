@@ -140,13 +140,13 @@ export const ALL_RANKS: RankInfo[] = [
  * Calculate total EXP by summing all 5 stats
  */
 export function getTotalExp(stats?: Partial<StudentStats>): number {
-  if (!stats) return 50; // default 10 * 5 = 50
+  if (!stats) return 5; // default 1 * 5 = 5
   return (
-    (stats.diligence ?? 10) +
-    (stats.frugality ?? 10) +
-    (stats.contribution ?? 10) +
-    (stats.wisdom ?? 10) +
-    (stats.credit ?? 10)
+    (stats.diligence ?? 1) +
+    (stats.frugality ?? 1) +
+    (stats.contribution ?? 1) +
+    (stats.wisdom ?? 1) +
+    (stats.credit ?? 1)
   );
 }
 

@@ -61,11 +61,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigateTa
 
   const currentStats = stats[currentUser.id] || {
     userId: currentUser.id,
-    diligence: 10,
-    frugality: 10,
-    contribution: 10,
-    wisdom: 10,
-    credit: 10,
+    diligence: 1,
+    frugality: 1,
+    contribution: 1,
+    wisdom: 1,
+    credit: 1,
   };
 
   const userJobs = getStudentJobs ? getStudentJobs(currentUser.id) : [];
